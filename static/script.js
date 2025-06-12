@@ -3,14 +3,13 @@ document.addEventListener('DOMContentLoaded', function() {
   const manufacturer = document.getElementById('manufacturer');
   const color = document.querySelector('[name="color_id"]');
 
-  // Функция обновления производителей и цветов при изменении выбора
   function updateFilters() {
     let cat = category ? category.value : "all";
     let man = manufacturer ? manufacturer.value : "all";
     fetch(`/api/filter_options?category_id=${cat}&manufacturer_id=${man}`)
       .then(r => r.json())
       .then(data => {
-        // --- Производители ---
+        // Производители
         if (manufacturer) {
           let selected = manufacturer.value;
           manufacturer.innerHTML = '<option value="all">Все</option>';
@@ -22,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
             manufacturer.appendChild(opt);
           });
         }
-        // --- Цвета ---
+        // Цвета
         if (color) {
           let selected = color.value;
           color.innerHTML = '<option value="all">Все</option>';
@@ -36,10 +35,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
   }
-
   if (category) category.addEventListener('change', updateFilters);
   if (manufacturer) manufacturer.addEventListener('change', updateFilters);
 
-  // Для корректного восстановления после POST — обновляем один раз при загрузке, если уже выбран фильтр
+  // при загрузке страницы — обновить всё (иначе select цвета не подстроится)
   updateFilters();
 });
