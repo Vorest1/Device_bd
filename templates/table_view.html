@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Таблица: {{ table }}</h2>
+
+  {% set one_to_one = ['specifications', 'displays', 'cameras', 'batteries'] %}
+  {% set auxiliary = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color'] %}
+
+  {% if table not in auxiliary and table not in one_to_one %}
+    <a href="{{ url_for('add_row', table_name=table) }}" class="btn btn-primary mb-2">Добавить запись</a>
+  {% endif %}
+
+  <table class="table table-bordered table-sm">
+    <thead>
+      <tr>
+        {% for col in columns %}
+          <th>{{ col }}</th>
+        {% endfor %}
+        {% if table not in auxiliary %}
+          <th>Действия</th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr>
+          {% for cell in row %}
+            <td>{{ cell }}</td>
+          {% endfor %}
+          {% if table not in auxiliary %}
+            <td>
+              <a href="{{ url_for('edit_row', table_name=table, pk=row[0]) }}" class="btn btn-warning btn-sm">Редактировать</a>
+              {% if table not in one_to_one %}
+                <form method="post" action="{{ url_for('delete_row', table_name=table, pk=row[0]) }}" style="display:inline;">
+                  <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Удалить запись?');">Удалить</button>
+                </form>
+              {% endif %}
+            </td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

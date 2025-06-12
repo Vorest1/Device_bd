@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>{{ main[0] }} ({{ main[1] }})</h2>
+  <h4>Основная информация</h4>
+  <ul>
+    <li><b>Модель:</b> {{ main[0] }}</li>
+    <li><b>Категория:</b> {{ main[1] }}</li>
+    <li><b>Производитель:</b> {{ main[2] }}</li>
+    <li><b>Дата выпуска:</b> {{ main[3] }}</li>
+    <li><b>Цена:</b> {{ main[4] }}</li>
+    <li><b>Водонепроницаемость:</b> {{ "Да" if main[5] else "Нет" }}</li>
+    <li><b>Гарантия (мес):</b> {{ main[6] }}</li>
+    <li><b>Цвет:</b> {{ main[7] }}</li>
+  </ul>
+
+  {% if retailers %}
+    <h4>Где купить</h4>
+    <table class="table table-bordered w-auto">
+      <thead>
+        <tr>
+          <th>Продавец</th>
+          <th>Сайт</th>
+          <th>Цена (₽)</th>
+          <th>В наличии</th>
+          <th>Последнее обновление</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for shop in retailers %}
+          <tr>
+            <td>{{ shop[0] }}</td>
+            <td>{{ shop[1] }}</a></td>
+            <td>{{ shop[2] }}</td>
+            <td>
+              {% if shop[3] %}
+                <span class="badge bg-success">Да</span>
+              {% else %}
+                <span class="badge bg-danger">Нет</span>
+              {% endif %}
+            </td>
+            <td>{{ shop[4] }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  {% if os_info %}
+  <h4>Операционная система</h4>
+  <ul>
+    <li><b>Название:</b> {{ os_info[0] }}</li>
+    <li><b>Разработчик:</b> {{ os_info[1] }}</li>
+    <li><b>Версия:</b> {{ os_info[2] }}</li>
+    <li><b>Дата релиза:</b> {{ os_info[3] }}</li>
+  </ul>
+  {% endif %}
+
+  {% if display %}
+  <h4>Дисплей</h4>
+  <ul>
+    <li><b>Диагональ:</b> {{ display[0] }} дюймов</li>
+    <li><b>Разрешение:</b> {{ display[1] }}</li>
+    <li><b>Тип матрицы:</b> {{ display[2] }}</li>
+    <li><b>Частота обновления:</b> {{ display[3] }} Гц</li>
+    <li><b>Яркость:</b> {{ display[4] }} нит</li>
+  </ul>
+  {% endif %}
+
+  {% if specs %}
+  <h4>Технические характеристики</h4>
+  <ul>
+    <li><b>Модель процессора:</b> {{ specs[0] }}</li>
+    <li><b>Ядер:</b> {{ specs[1] }}</li>
+    <li><b>RAM:</b> {{ specs[2] }} Гб</li>
+    <li><b>Память:</b> {{ specs[3] }} Гб</li>
+    <li><b>Тип накопителя:</b> {{ specs[4] }}</li>
+  </ul>
+  {% endif %}
+
+  {% if battery %}
+  <h4>Батарея</h4>
+  <ul>
+    <li><b>Ёмкость:</b> {{ battery[0] }} мАч</li>
+    <li><b>Быстрая зарядка:</b> {{ battery[1] }} Вт</li>
+    <li><b>Беспроводная зарядка:</b> {{ "Да" if battery[2] else "Нет" }}</li>
+    <li><b>Время работы:</b> {{ battery[3] }} часов</li>
+  </ul>
+  {% endif %}
+
+  {% if camera %}
+  <h4>Камера</h4>
+  <ul>
+    <li><b>Мегапиксели:</b> {{ camera[0] }}</li>
+    <li><b>Диафрагма:</b> {{ camera[1] }}</li>
+    <li><b>Зум:</b> {{ camera[2] }}x</li>
+    <li><b>Видео:</b> {{ camera[3] }}</li>
+    <li><b>ИИ-улучшение:</b> {{ "Да" if camera[4] else "Нет" }}</li>
+  </ul>
+  {% endif %}
+
+  <a href="{{ url_for('all_devices') }}" class="btn btn-secondary mt-3">Назад к списку</a>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Редактировать запись в {{ table }}</h2>
+  <form method="POST">
+    {% for col, val in zip(columns, row) %}
+      {% if col == pk_name %}
+        <input type="hidden" name="{{ col }}" value="{{ val }}">
+      {% elif col in fk_options %}
+        <div class="mb-3">
+          <label class="form-label">{{ col }}</label>
+          <select name="{{ col }}" class="form-select">
+            {% for opt in fk_options[col] %}
+              <option value="{{ opt[0] }}" {% if opt[0] == val %}selected{% endif %}>{{ opt[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      {% else %}
+        <div class="mb-3">
+          <label class="form-label">{{ col }}</label>
+          <input name="{{ col }}" class="form-control" value="{{ val }}">
+        </div>
+      {% endif %}
+    {% endfor %}
+    <button type="submit" class="btn btn-success">Сохранить</button>
+    <a href="{{ url_for('table_view', table_name=table) }}" class="btn btn-secondary">Назад</a>
+  </form>
+{% endblock %}

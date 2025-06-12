@@ -1,0 +1,10 @@
+body {
+    font-size: 1.1em;
+}
+h1, h2 {
+    margin-top: 15px;
+    margin-bottom: 20px;
+}
+.table {
+    margin-top: 10px;
+}

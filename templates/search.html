@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Поиск устройств по критериям</h2>
+  <form method="POST" id="search-form" class="row g-3">
+    <div class="col-md-3">
+      <label class="form-label">Категория</label>
+      <select class="form-select" name="category_id" id="category">
+        <option value="all" {% if selected_category == "all" %}selected{% endif %}>Все</option>
+        {% for cat in categories %}
+          <option value="{{ cat[0] }}" {% if selected_category == cat[0]|string %}selected{% endif %}>{{ cat[1] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Производитель</label>
+      <select class="form-select" name="manufacturer_id" id="manufacturer">
+        <option value="all" {% if selected_manufacturer == "all" %}selected{% endif %}>Все</option>
+        {% for man in manufacturers %}
+          <option value="{{ man[0] }}" {% if selected_manufacturer == man[0]|string %}selected{% endif %}>{{ man[1] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Цвет</label>
+      <select class="form-select" name="color_id">
+        <option value="all" {% if selected_color == "all" %}selected{% endif %}>Все</option>
+        {% for color in colors %}
+          <option value="{{ color[0] }}" {% if selected_color == color[0]|string %}selected{% endif %}>{{ color[1] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-1">
+      <label class="form-label">Цена от</label>
+      <input type="number" class="form-control" name="price_min" value="{{ price_min or '' }}">
+    </div>
+    <div class="col-md-1">
+      <label class="form-label">Цена до</label>
+      <input type="number" class="form-control" name="price_max" value="{{ price_max or '' }}">
+    </div>
+    <div class="col-md-1 d-flex align-items-end">
+      <button type="submit" class="btn btn-primary w-100">Найти</button>
+    </div>
+  </form>
+  <hr>
+  {% if results is defined %}
+    {% if results %}
+      <h4>Результаты поиска:</h4>
+      <table class="table table-striped w-auto">
+        <thead>
+          <tr>
+            <th>Модель</th>
+            <th>Производитель</th>
+            <th>Категория</th>
+            <th>Страна</th>
+            <th>Цена</th>
+            <th>Цвет</th>
+            <th>Водонепр.</th>
+            <th>Память (Гб)</th>
+            <th>Тип накопителя</th>
+            <th>Модель процессора</th>
+            <th>Диагональ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in results %}
+            <tr>
+              <td>
+                <a href="{{ url_for('device_detail', device_id=row[0]) }}">{{ row[1] }}</a>
+              </td>
+              {% for cell in row[2:] %}
+                <td>{{ cell }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>Нет совпадений.</p>
+    {% endif %}
+  {% endif %}
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+{% endblock %}

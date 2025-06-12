@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Все устройства</h2>
+  <ul>
+    {% for d in devices %}
+      <li>
+        <a href="{{ url_for('device_detail', device_id=d[0]) }}">{{ d[1] }}</a>
+        ({{ d[2] }}, {{ d[3] }})
+      </li>
+    {% endfor %}
+  </ul>
+{% endblock %}

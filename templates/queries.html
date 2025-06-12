@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>SQL-запросы</h2>
+
+  <form method="POST" class="mb-3">
+    <button name="query_name" value="all_manufacturers_countries" class="btn btn-primary mb-2">Список всех производителей и стран</button>
+  </form>
+  <form method="POST" class="mb-3">
+    <button name="query_name" value="waterproof_devices" class="btn btn-primary mb-2">Устройства с водонепроницаемостью</button>
+  </form>
+  <form method="POST" class="mb-3">
+    <button name="query_name" value="cheapest_5" class="btn btn-primary mb-2">5 самых дешевых устройств в наличии</button>
+  </form>
+  <form method="POST" class="mb-3">
+    <button name="query_name" value="avg_price" class="btn btn-primary mb-2">Средняя цена всех устройств</button>
+  </form>
+
+  {% if result %}
+    <table class="table table-bordered w-auto mt-3">
+      <thead>
+        <tr>
+          {% for col in columns %}
+            <th>{{ col }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in result %}
+          <tr>
+            {% for cell in row %}
+              <td>{{ cell }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}
