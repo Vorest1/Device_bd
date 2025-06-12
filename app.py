@@ -306,10 +306,9 @@ def search():
 def api_filter_options():
     category_id = request.args.get('category_id')
     manufacturer_id = request.args.get('manufacturer_id')
-    color_id = request.args.get('color_id')
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        # Динамические производители
+        # Производители (как раньше)
         q = "SELECT DISTINCT m.manufacturer_id, m.name FROM manufacturers m JOIN devices d ON m.manufacturer_id = d.manufacturer_id WHERE 1=1"
         params = []
         if category_id and category_id != "all":
@@ -317,9 +316,14 @@ def api_filter_options():
             params.append(category_id)
         c.execute(q, params)
         manufacturers = [{'manufacturer_id': row[0], 'name': row[1]} for row in c.fetchall()]
-        
-        # Динамические цвета
-        q = "SELECT DISTINCT col.color_id, col.name FROM color col JOIN devices d ON col.color_id = d.color_id WHERE 1=1"
+
+        # --- Цвета: выбираем только те, которые есть у устройств с этой категорией и этим производителем ---
+        q = """
+            SELECT DISTINCT col.color_id, col.name
+            FROM color col
+            JOIN devices d ON col.color_id = d.color_id
+            WHERE 1=1
+        """
         params = []
         if category_id and category_id != "all":
             q += " AND d.category_id = ?"
