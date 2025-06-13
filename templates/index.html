@@ -10,7 +10,7 @@
     </thead>
     <tbody>
       {% set one_to_one = ['specifications', 'displays', 'cameras', 'batteries'] %}
-      {% set auxiliary = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color'] %}
+      {% set auxiliary = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color', 'os_name'] %}
       {% for table in tables %}
         <tr {% if table == 'devices' %}class="table-primary"{% endif %}>
           <td>

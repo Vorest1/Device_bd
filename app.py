@@ -6,7 +6,7 @@ app = Flask(__name__)
 DB_PATH = os.path.join('db', '2lr.db')
 
 # Вспомогательные таблицы и one-to-one с devices
-AUXILIARY = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color']
+AUXILIARY = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color', 'os_name']
 ONE_TO_ONE = ['specifications', 'displays', 'cameras', 'batteries']
 
 def get_tables():

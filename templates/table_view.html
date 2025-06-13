@@ -3,7 +3,7 @@
   <h2>Таблица: {{ table }}</h2>
 
   {% set one_to_one = ['specifications', 'displays', 'cameras', 'batteries'] %}
-  {% set auxiliary = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color'] %}
+  {% set auxiliary = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color', 'os_name'] %}
 
   {% if table not in auxiliary and table not in one_to_one %}
     <a href="{{ url_for('add_row', table_name=table) }}" class="btn btn-primary mb-2">Добавить запись</a>
