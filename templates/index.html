@@ -1,11 +1,37 @@
 {% extends "base.html" %}
 {% block content %}
   <h1>Список таблиц</h1>
-  <ul>
-    {% for table in tables %}
-      <li>
-        <a href="{{ url_for('table_view', table_name=table) }}">{{ table }}</a>
-      </li>
-    {% endfor %}
-  </ul>
+  <table class="table table-bordered w-auto">
+    <thead>
+      <tr>
+        <th>Таблица</th>
+        <th>Действия</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set one_to_one = ['specifications', 'displays', 'cameras', 'batteries'] %}
+      {% set auxiliary = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color'] %}
+      {% for table in tables %}
+        <tr {% if table == 'devices' %}class="table-primary"{% endif %}>
+          <td>
+            <a href="{{ url_for('table_view', table_name=table) }}">
+              <span style="{% if table == 'devices' %}font-size: 1.5em; font-weight:bold; {% endif %}">
+                {{ table }}
+              </span>
+            </a>
+          </td>
+          <td>
+            {% if table in one_to_one %}
+              <a href="{{ url_for('table_view', table_name=table) }}" class="btn btn-warning btn-sm">Редактировать</a>
+            {% elif table in auxiliary %}
+              <span class="text-muted">Только просмотр</span>
+            {% else %}
+              <a href="{{ url_for('add_row', table_name=table) }}" class="btn btn-success btn-sm">Добавить</a>
+              <a href="{{ url_for('table_view', table_name=table) }}" class="btn btn-warning btn-sm">Редактировать</a>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 {% endblock %}

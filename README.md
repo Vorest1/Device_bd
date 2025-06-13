@@ -6,7 +6,7 @@
 2. Установите Flask:
     ```
     python -m venv venv
-    source venv/bin/activate
+    source venv/bin/activate   venv\Scripts\activate
     pip install flask
     ```
 3. Запустите приложение:

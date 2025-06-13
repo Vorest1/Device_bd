@@ -5,15 +5,22 @@ import os
 app = Flask(__name__)
 DB_PATH = os.path.join('db', '2lr.db')
 
+# Вспомогательные таблицы и one-to-one с devices
+AUXILIARY = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color']
+ONE_TO_ONE = ['specifications', 'displays', 'cameras', 'batteries']
+
 def get_tables():
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        c.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         return [row[0] for row in c.fetchall() if not row[0].startswith('sqlite_')]
 
 @app.route('/')
 def index():
     tables = get_tables()
+    if 'devices' in tables:
+        tables.remove('devices')
+        tables = ['devices'] + tables
     return render_template('index.html', tables=tables)
 
 @app.route('/table/<table_name>')
@@ -28,10 +35,14 @@ def table_view(table_name):
 
 @app.route('/add/<table_name>', methods=['GET', 'POST'])
 def add_row(table_name):
+    # Универсальный роут, можно кастомизировать для devices
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute(f"PRAGMA table_info({table_name})")
         columns = [desc[1] for desc in c.fetchall()]
+        # Автоматически исключаем id, если он AUTOINCREMENT
+        if columns[0].endswith("_id"):
+            columns = columns[1:]
     if request.method == 'POST':
         values = [request.form.get(col) for col in columns]
         placeholders = ','.join(['?'] * len(columns))
@@ -39,6 +50,9 @@ def add_row(table_name):
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute(query, values)
         return redirect(url_for('table_view', table_name=table_name))
+    # Для devices используем отдельную страницу
+    if table_name == "devices":
+        return redirect(url_for('add_device_full'))
     return render_template('add_form.html', table=table_name, columns=columns)
 
 @app.route('/delete/<table_name>/<pk>', methods=['POST'])
@@ -50,31 +64,20 @@ def delete_row(table_name, pk):
         pk_name = c.fetchone()[1]
         c.execute(f"DELETE FROM {table_name} WHERE {pk_name} = ?", (pk,))
     return redirect(url_for('table_view', table_name=table_name))
+
 @app.route('/add/devices', methods=['GET', 'POST'])
-def add_device():
+def add_device_basic():
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute("SELECT manufacturer_id, name FROM manufacturers ORDER BY name")
         manufacturers = c.fetchall()
         c.execute("SELECT category_id, name FROM categories ORDER BY name")
         categories = c.fetchall()
-        c.execute("""
-            SELECT os_id, osn.name FROM operating_systems osys
-            JOIN os_name osn ON osys.os_name_id = osn.os_name_id
-            ORDER BY osn.name
-        """)
+        c.execute("SELECT os_id, osn.name FROM operating_systems osys JOIN os_name osn ON osys.os_name_id = osn.os_name_id ORDER BY osn.name")
         operating_systems = c.fetchall()
         c.execute("SELECT color_id, name FROM color ORDER BY name")
         colors = c.fetchall()
-        c.execute("SELECT storage_type_id, name FROM storage_type ORDER BY name")
-        storage_types = c.fetchall()
-        c.execute("SELECT proc_model_id, name FROM proc_model ORDER BY name")
-        proc_models = c.fetchall()
-        c.execute("SELECT techn_matr_id, name FROM techn_matr ORDER BY name")
-        matr_types = c.fetchall()
-
     if request.method == 'POST':
-        # Devices
         manufacturer_id = request.form.get('manufacturer_id')
         category_id = request.form.get('category_id')
         os_id = request.form.get('os_id')
@@ -85,37 +88,8 @@ def add_device():
         color_id = request.form.get('color_id')
         is_waterproof = request.form.get('is_waterproof')
         warranty_months = request.form.get('warranty_months')
-
-        # Specifications
-        proc_model_id = request.form.get('proc_model_id')
-        processor_cores = request.form.get('processor_cores')
-        ram_gb = request.form.get('ram_gb')
-        storage_gb = request.form.get('storage_gb')
-        storage_type_id = request.form.get('storage_type_id')
-
-        # Display
-        diagonal_inches = request.form.get('diagonal_inches')
-        resolution = request.form.get('resolution')
-        techn_matr_id = request.form.get('techn_matr_id')
-        refresh_rate_hz = request.form.get('refresh_rate_hz')
-        brightness_nits = request.form.get('brightness_nits')
-
-        # Camera
-        megapixels_main = request.form.get('megapixels_main')
-        aperture_main = request.form.get('aperture_main')
-        optical_zoom_x = request.form.get('optical_zoom_x')
-        video_resolution = request.form.get('video_resolution')
-        has_ai_enhance = request.form.get('has_ai_enhance')
-
-        # Battery
-        capacity_mah = request.form.get('capacity_mah')
-        fast_charging_w = request.form.get('fast_charging_w')
-        wireless_charging = request.form.get('wireless_charging')
-        estimated_life_hours = request.form.get('estimated_life_hours')
-
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
-            # 1. Devices (device_id присваивается автоматически)
             c.execute("""
                 INSERT INTO devices (
                     manufacturer_id, category_id, os_id, model, release_date, current_price,
@@ -124,71 +98,139 @@ def add_device():
             """, (manufacturer_id, category_id, os_id, model, release_date, current_price,
                   weight_grams, color_id, is_waterproof, warranty_months))
             device_id = c.lastrowid
+        # После создания устройства — предложить добавить характеристики, дисплей и т.д.
+        return redirect(url_for('after_device_add', device_id=device_id))
+    return render_template(
+        'add_device_basic.html',
+        manufacturers=manufacturers,
+        categories=categories,
+        operating_systems=operating_systems,
+        colors=colors
+    )
 
-            # 2. Specifications
+@app.route('/add/after_device/<int:device_id>')
+def after_device_add(device_id):
+    return render_template('after_device_add.html', device_id=device_id)
+
+@app.route('/add/specifications', methods=['GET', 'POST'])
+def add_specifications():
+    device_id = request.args.get('device_id', type=int) or request.form.get('device_id', type=int)
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT proc_model_id, name FROM proc_model ORDER BY name")
+        proc_models = c.fetchall()
+        c.execute("SELECT storage_type_id, name FROM storage_type ORDER BY name")
+        storage_types = c.fetchall()
+    if request.method == 'POST':
+        proc_model_id = request.form.get('proc_model_id')
+        processor_cores = request.form.get('processor_cores')
+        ram_gb = request.form.get('ram_gb')
+        storage_gb = request.form.get('storage_gb')
+        storage_type_id = request.form.get('storage_type_id')
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
             c.execute("""
                 INSERT INTO specifications (
                     device_id, proc_model_id, processor_cores, ram_gb, storage_gb, storage_type_id
                 ) VALUES (?, ?, ?, ?, ?, ?)
             """, (device_id, proc_model_id, processor_cores, ram_gb, storage_gb, storage_type_id))
+        return redirect(url_for('after_device_add', device_id=device_id))
+    return render_template(
+        'add_specifications.html',
+        device_id=device_id,
+        proc_models=proc_models,
+        storage_types=storage_types
+    )
 
-            # 3. Display
+@app.route('/add/display', methods=['GET', 'POST'])
+def add_display():
+    device_id = request.args.get('device_id', type=int) or request.form.get('device_id', type=int)
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT techn_matr_id, name FROM techn_matr ORDER BY name")
+        matr_types = c.fetchall()
+    if request.method == 'POST':
+        diagonal_inches = request.form.get('diagonal_inches')
+        resolution = request.form.get('resolution')
+        techn_matr_id = request.form.get('techn_matr_id')
+        refresh_rate_hz = request.form.get('refresh_rate_hz')
+        brightness_nits = request.form.get('brightness_nits')
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
             c.execute("""
                 INSERT INTO displays (
                     device_id, diagonal_inches, resolution, techn_matr_id, refresh_rate_hz, brightness_nits
                 ) VALUES (?, ?, ?, ?, ?, ?)
             """, (device_id, diagonal_inches, resolution, techn_matr_id, refresh_rate_hz, brightness_nits))
+        return redirect(url_for('after_device_add', device_id=device_id))
+    return render_template(
+        'add_display.html',
+        device_id=device_id,
+        matr_types=matr_types
+    )
 
-            # 4. Camera (если поля заполнены)
-            if megapixels_main and aperture_main:
-                c.execute("""
-                    INSERT INTO cameras (
-                        device_id, megapixels_main, aperture_main, optical_zoom_x, video_resolution, has_ai_enhance
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                """, (device_id, megapixels_main, aperture_main, optical_zoom_x, video_resolution, has_ai_enhance))
+@app.route('/add/camera', methods=['GET', 'POST'])
+def add_camera():
+    device_id = request.args.get('device_id', type=int) or request.form.get('device_id', type=int)
+    if request.method == 'POST':
+        megapixels_main = request.form.get('megapixels_main')
+        aperture_main = request.form.get('aperture_main')
+        optical_zoom_x = request.form.get('optical_zoom_x')
+        video_resolution = request.form.get('video_resolution')
+        has_ai_enhance = request.form.get('has_ai_enhance')
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO cameras (
+                    device_id, megapixels_main, aperture_main, optical_zoom_x, video_resolution, has_ai_enhance
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            """, (device_id, megapixels_main, aperture_main, optical_zoom_x, video_resolution, has_ai_enhance))
+        return redirect(url_for('after_device_add', device_id=device_id))
+    return render_template(
+        'add_camera.html',
+        device_id=device_id
+    )
 
-            # 5. Battery
+@app.route('/add/battery', methods=['GET', 'POST'])
+def add_battery():
+    device_id = request.args.get('device_id', type=int) or request.form.get('device_id', type=int)
+    if request.method == 'POST':
+        capacity_mah = request.form.get('capacity_mah')
+        fast_charging_w = request.form.get('fast_charging_w')
+        wireless_charging = request.form.get('wireless_charging')
+        estimated_life_hours = request.form.get('estimated_life_hours')
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
             c.execute("""
                 INSERT INTO batteries (
                     device_id, capacity_mah, fast_charging_w, wireless_charging, estimated_life_hours
                 ) VALUES (?, ?, ?, ?, ?)
             """, (device_id, capacity_mah, fast_charging_w, wireless_charging, estimated_life_hours))
-
-        return redirect(url_for('table_view', table_name='devices'))
-
+        return redirect(url_for('after_device_add', device_id=device_id))
     return render_template(
-        'add_device_full.html',
-        manufacturers=manufacturers,
-        categories=categories,
-        operating_systems=operating_systems,
-        colors=colors,
-        proc_models=proc_models,
-        storage_types=storage_types,
-        matr_types=matr_types
+        'add_battery.html',
+        device_id=device_id
     )
 
 @app.route('/edit/<table_name>/<pk>', methods=['GET', 'POST'])
 def edit_row(table_name, pk):
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        # Получить названия столбцов
         c.execute(f"PRAGMA table_info({table_name})")
         columns_info = c.fetchall()
         columns = [col[1] for col in columns_info]
         pk_name = columns[0]
 
-        # Внешние ключи для select'ов (простая логика: *_id кроме pk)
         fk_options = {}
         for col in columns:
             if col.endswith('_id') and col != pk_name:
-                ref_table = col[:-3]  # например: color_id -> color
+                ref_table = col[:-3]
                 try:
                     c.execute(f"SELECT {col}, name FROM {ref_table} ORDER BY name")
                     fk_options[col] = c.fetchall()
                 except Exception:
-                    pass  # если справочника нет
+                    pass
 
-        # GET: показываем текущие значения
         if request.method == 'GET':
             c.execute(f"SELECT * FROM {table_name} WHERE {pk_name} = ?", (pk,))
             row = c.fetchone()
@@ -202,20 +244,16 @@ def edit_row(table_name, pk):
                 pk_name=pk_name,
                 zip=zip
             )
-
-        # POST: обновляем
         values = []
         for idx, col in enumerate(columns):
             if col == pk_name:
-                continue  # pk не редактируется
+                continue
             values.append(request.form.get(col))
-        # prepare SET ... part
         set_str = ', '.join([f"{col}=?" for col in columns if col != pk_name])
         values.append(pk)
         c.execute(f"UPDATE {table_name} SET {set_str} WHERE {pk_name} = ?", values)
         conn.commit()
         return redirect(url_for('table_view', table_name=table_name))
-
 
 @app.route('/statistics')
 def statistics():
@@ -226,10 +264,8 @@ def statistics():
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         tables = [row[0] for row in c.fetchall()]
         for table in tables:
-            # Количество записей
             c.execute(f"SELECT COUNT(*) FROM {table}")
             stats[table] = c.fetchone()[0]
-            # Количество атрибутов (столбцов)
             c.execute(f"PRAGMA table_info({table})")
             columns_count[table] = len(c.fetchall())
     return render_template('statistics.html', stats=stats, columns_count=columns_count)
@@ -302,13 +338,14 @@ def search():
         results=results
     )
 
+# --- Пример API endpoint для каскадных списков ---
 @app.route('/api/filter_options')
 def api_filter_options():
     category_id = request.args.get('category_id')
     manufacturer_id = request.args.get('manufacturer_id')
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        # Производители (как раньше)
+        # Производители (по выбранной категории)
         q = "SELECT DISTINCT m.manufacturer_id, m.name FROM manufacturers m JOIN devices d ON m.manufacturer_id = d.manufacturer_id WHERE 1=1"
         params = []
         if category_id and category_id != "all":
@@ -316,8 +353,7 @@ def api_filter_options():
             params.append(category_id)
         c.execute(q, params)
         manufacturers = [{'manufacturer_id': row[0], 'name': row[1]} for row in c.fetchall()]
-
-        # --- Цвета: выбираем только те, которые есть у устройств с этой категорией и этим производителем ---
+        # Цвета (по категории и производителю)
         q = """
             SELECT DISTINCT col.color_id, col.name
             FROM color col

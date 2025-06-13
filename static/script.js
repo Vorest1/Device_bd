@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', function() {
     fetch(`/api/filter_options?category_id=${cat}&manufacturer_id=${man}`)
       .then(r => r.json())
       .then(data => {
-        // Производители
         if (manufacturer) {
           let selected = manufacturer.value;
           manufacturer.innerHTML = '<option value="all">Все</option>';
@@ -21,7 +20,6 @@ document.addEventListener('DOMContentLoaded', function() {
             manufacturer.appendChild(opt);
           });
         }
-        // Цвета
         if (color) {
           let selected = color.value;
           color.innerHTML = '<option value="all">Все</option>';
@@ -37,7 +35,5 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   if (category) category.addEventListener('change', updateFilters);
   if (manufacturer) manufacturer.addEventListener('change', updateFilters);
-
-  // при загрузке страницы — обновить всё (иначе select цвета не подстроится)
   updateFilters();
 });

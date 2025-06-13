@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Добавить характеристики для устройства #{{ device_id }}</h2>
+  <form method="POST">
+    <input type="hidden" name="device_id" value="{{ device_id }}">
+    <div class="mb-3">
+      <label class="form-label">Модель процессора</label>
+      <select class="form-select" name="proc_model_id" required>
+        <option value="">Выберите</option>
+        {% for pm in proc_models %}
+          <option value="{{ pm[0] }}">{{ pm[1] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Ядер</label>
+      <input type="number" name="processor_cores" class="form-control" min="1" max="20" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">RAM (Гб)</label>
+      <input type="number" name="ram_gb" class="form-control" min="1" max="32" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Память (Гб)</label>
+      <input type="number" name="storage_gb" class="form-control" min="1" max="2048" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Тип накопителя</label>
+      <select class="form-select" name="storage_type_id" required>
+        <option value="">Выберите</option>
+        {% for st in storage_types %}
+          <option value="{{ st[0] }}">{{ st[1] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-success">Сохранить</button>
+    <a href="{{ url_for('after_device_add', device_id=device_id) }}" class="btn btn-secondary">Пропустить/Назад</a>
+  </form>
+{% endblock %}
