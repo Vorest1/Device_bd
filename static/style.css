@@ -1,10 +1,32 @@
-body {
-    font-size: 1.1em;
+/* Сбрасываем margin/padding для body и html */
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background-color: #f8f9fa;
+    font-family: Arial, sans-serif;
 }
-h1, h2 {
-    margin-top: 15px;
-    margin-bottom: 20px;
+
+/* Навигация занимает всю ширину */
+.navbar {
+    width: 100%;
 }
-.table {
-    margin-top: 10px;
+
+/* Контейнер с контентом — обычная максимальная ширина bootstrap */
+.container {
+    max-width: 960px; /* можно оставить дефолтное bootstrap или настроить */
+}
+
+.button-wrapper {
+    display: flex;
+    justify-content: center; /* горизонтальный центр */
+    margin-top: 15vh; /* сдвигаем вниз на 15% высоты окна */
+    min-height: 60vh; /* задаём минимальную высоту, чтобы занимать 60% высоты окна */
+    align-items: center; /* вертикальное центрирование внутри блока */
+    flex-direction: column;
+}
+
+.btn-group-vertical > .btn {
+    margin-bottom: 10px;
+    min-width: 200px;
 }

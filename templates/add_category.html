@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Добавить категорию</h2>
+<form method="POST" class="row g-3">
+  <div class="col-md-4">
+    <label class="form-label">Название</label>
+    <input type="text" class="form-control" name="name" maxlength="30" required>
+  </div>
+  <div class="col-md-8">
+    <label class="form-label">Описание</label>
+    <textarea class="form-control" name="description" maxlength="500"></textarea>
+  </div>
+  <div class="col-12 d-flex justify-content-end">
+    <button type="submit" class="btn btn-success mt-3">Добавить</button>
+  </div>
+  <input type="hidden" name="next_url" value="{{ next_url }}">
+</form>
+{% endblock %}

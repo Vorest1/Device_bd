@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Добавление устройства</h2>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <form method="POST" class="row g-3">
+    <!-- Производитель -->
+    <div class="col-md-4">
+      <label class="form-label">Производитель</label>
+      <div class="input-group">
+        <select class="form-select" name="manufacturer_id" required>
+          <option value="" disabled selected>Выберите...</option>
+          {% for m in manufacturers %}
+            <option value="{{ m[0] }}">{{ m[1] }}</option>
+          {% endfor %}
+        </select>
+        <a href="{{ url_for('add_manufacturer', next=request.path) }}" class="btn btn-outline-secondary" title="Добавить нового производителя">+</a>
+      </div>
+    </div>
+    <!-- Категория -->
+    <div class="col-md-4">
+      <label class="form-label">Категория</label>
+      <div class="input-group">
+        <select class="form-select" name="category_id" required>
+          <option value="" disabled selected>Выберите...</option>
+          {% for c in categories %}
+            <option value="{{ c[0] }}">{{ c[1] }}</option>
+          {% endfor %}
+        </select>
+        <a href="{{ url_for('add_category', next=request.path) }}" class="btn btn-outline-secondary" title="Добавить новую категорию">+</a>
+      </div>
+    </div>
+    <!-- Операционная система -->
+    <div class="col-md-4">
+      <label class="form-label">Операционная система</label>
+      <div class="input-group">
+        <select class="form-select" name="os_id" required>
+          <option value="" disabled selected>Выберите...</option>
+          {% for os in operating_systems %}
+            <option value="{{ os[0] }}">{{ os[1] }} ({{ os[2] }})</option>
+          {% endfor %}
+        </select>
+        <a href="{{ url_for('add_os', next=request.path) }}" class="btn btn-outline-secondary" title="Добавить ОС">+</a>
+      </div>
+    </div>
+    <!-- Модель -->
+    <div class="col-md-4">
+      <label class="form-label">Модель</label>
+      <input type="text" class="form-control" name="model" maxlength="30" required>
+    </div>
+    <!-- Дата выпуска -->
+    <div class="col-md-4">
+      <label class="form-label">Дата выпуска</label>
+      <input type="date" class="form-control" name="release_date"
+             min="1990-01-01" max="2025-05-31" required>
+    </div>
+    <!-- Текущая стоимость -->
+    <div class="col-md-4">
+      <label class="form-label">Текущая стоимость (₽)</label>
+      <input type="number" class="form-control" name="current_price"
+             step="0.01" min="0" max="1000000" required>
+    </div>
+    <!-- Вес -->
+    <div class="col-md-4">
+      <label class="form-label">Вес (грамм)</label>
+      <input type="number" class="form-control" name="weight_grams"
+             min="1" max="1000000" required>
+    </div>
+    <!-- Цвет -->
+    <div class="col-md-4">
+      <label class="form-label">Цвет</label>
+      <div class="input-group">
+        <select class="form-select" name="color_id" required>
+          <option value="" disabled selected>Выберите...</option>
+          {% for c in colors %}
+            <option value="{{ c[0] }}">{{ c[1] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <!-- Гарантия -->
+    <div class="col-md-4">
+      <label class="form-label">Гарантия (мес)</label>
+      <input type="number" class="form-control" name="warranty_months"
+             min="1" max="24" required>
+    </div>
+    <!-- Водонепроницаемость -->
+    <div class="col-md-4">
+      <label class="form-label">Водонепроницаемость</label>
+      <div class="form-check mt-2">
+        <input class="form-check-input" type="checkbox" name="is_waterproof" id="waterproof">
+        <label class="form-check-label" for="waterproof">Есть</label>
+      </div>
+    </div>
+
+    <!-- device_retailers -->
+    <hr>
+    <h5>Информация о продаже устройства</h5>
+    <div id="retailer-section">
+      <div class="row g-3 retailer-block align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Продавец</label>
+          <div class="input-group">
+            <select class="form-select" name="retailer_id[]" required>
+              <option value="" disabled selected>Выберите...</option>
+              {% for r in retailers %}
+                <option value="{{ r[0] }}">{{ r[1] }}</option>
+              {% endfor %}
+            </select>
+            <a href="{{ url_for('add_retailer', next=request.path) }}" class="btn btn-outline-secondary" title="Добавить продавца">+</a>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Цена на сайте (₽)</label>
+          <input type="number" class="form-control" name="site_price[]" min="0" max="1000000" step="0.01" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">В наличии</label>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" name="in_stock0" id="in_stock0">
+            <label class="form-check-label" for="in_stock0">Да</label>
+          </div>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Последнее обновление</label>
+          <input type="date" class="form-control" name="last_updated[]"
+             min="2016-01-01" max="2025-05-31" required>
+        </div>
+        <div class="col-12">
+          <button type="button" class="btn btn-outline-danger btn-sm remove-retailer-btn d-none">Удалить продавца</button>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <button type="button" class="btn btn-outline-secondary mt-2" id="add-retailer-btn">Добавить ещё продавца</button>
+    </div>
+
+    <div class="col-12 d-flex justify-content-end">
+      <button type="submit" class="btn btn-success mt-3">Добавить устройство</button>
+    </div>
+  </form>
+
+  <script>
+  let retailerCount = 1;
+  document.getElementById('add-retailer-btn').onclick = function() {
+    retailerCount++;
+    let section = document.getElementById('retailer-section');
+    let block = document.createElement('div');
+    block.className = 'row g-3 retailer-block align-items-end mt-2';
+    block.innerHTML = `
+      <div class="col-md-4">
+        <div class="input-group">
+          <select class="form-select" name="retailer_id[]" required>
+            <option value="" disabled selected>Выберите...</option>
+            {% for r in retailers %}
+              <option value="{{ r[0] }}">{{ r[1] }}</option>
+            {% endfor %}
+          </select>
+          <a href="{{ url_for('add_retailer', next=request.path) }}" class="btn btn-outline-secondary" title="Добавить продавца">+</a>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <input type="number" class="form-control" name="site_price[]" min="0" max="1000000" step="0.01" required placeholder="Цена на сайте (₽)">
+      </div>
+      <div class="col-md-2">
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" name="in_stock${retailerCount}" id="in_stock${retailerCount}">
+          <label class="form-check-label" for="in_stock${retailerCount}">В наличии</label>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <input type="date" class="form-control" name="last_updated[]" min="2016-01-01" max="2025-05-31" required placeholder="Последнее обновление">
+      </div>
+      <div class="col-12">
+        <button type="button" class="btn btn-outline-danger btn-sm remove-retailer-btn">Удалить продавца</button>
+      </div>
+    `;
+    section.appendChild(block);
+    updateRemoveButtons();
+  };
+  function updateRemoveButtons() {
+    let btns = document.querySelectorAll('.remove-retailer-btn');
+    btns.forEach((btn, idx) => {
+      btn.classList.toggle('d-none', document.querySelectorAll('.retailer-block').length === 1);
+      btn.onclick = function() {
+        btn.closest('.retailer-block').remove();
+        updateRemoveButtons();
+      }
+    });
+  }
+  updateRemoveButtons();
+  </script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // 1. ВОССТАНОВЛЕНИЕ
+  if (localStorage.getItem('addDeviceForm')) {
+    let formData = JSON.parse(localStorage.getItem('addDeviceForm'));
+    // Восстановление обычных полей
+    for (let key in formData) {
+      if (Array.isArray(formData[key])) continue; // обработаем ниже
+      let el = document.querySelector('[name="' + key + '"]');
+      if (!el) continue;
+      if (el.type === 'checkbox') {
+        el.checked = formData[key];
+      } else {
+        el.value = formData[key];
+      }
+    }
+    // Восстановление массива продавцов
+    if (formData['retailer_id[]'] && Array.isArray(formData['retailer_id[]'])) {
+      let count = formData['retailer_id[]'].length;
+      // если блоков продавцов меньше, чем надо — добавить блоки
+      for (let i = document.querySelectorAll('.retailer-block').length; i < count; i++) {
+        document.getElementById('add-retailer-btn').click();
+      }
+      // теперь восстановить значения
+      let blocks = document.querySelectorAll('.retailer-block');
+      for (let i = 0; i < count; i++) {
+        let block = blocks[i];
+        // Продавец
+        let sel = block.querySelector('[name="retailer_id[]"]');
+        if (sel) sel.value = formData['retailer_id[]'][i];
+        // Цена
+        let price = block.querySelector('[name="site_price[]"]');
+        if (price) price.value = formData['site_price[]'][i];
+        // Дата
+        let date = block.querySelector('[name="last_updated[]"]');
+        if (date) date.value = formData['last_updated[]'][i];
+        // В наличии (чекбокс)
+        let check = block.querySelector('[type="checkbox"]');
+        if (check && formData['in_stock'+i] !== undefined)
+          check.checked = formData['in_stock'+i];
+      }
+    }
+    localStorage.removeItem('addDeviceForm');
+  }
+
+  // 2. СОХРАНЕНИЕ (для кнопок "+")
+  document.querySelectorAll('a.btn-outline-secondary, a.btn-outline-secondary.btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      let data = {};
+      // Обычные поля
+      document.querySelectorAll('form [name]:not([name$="[]"])').forEach(function(input) {
+        if (input.type === 'checkbox') {
+          data[input.name] = input.checked;
+        } else {
+          data[input.name] = input.value;
+        }
+      });
+      // Массивы значений (для динамических блоков)
+      ['retailer_id[]', 'site_price[]', 'last_updated[]'].forEach(function(arrName) {
+        let arr = [];
+        document.querySelectorAll('[name="'+arrName+'"]').forEach(function(input) {
+          arr.push(input.value);
+        });
+        data[arrName] = arr;
+      });
+      // Чекбоксы "в наличии"
+      document.querySelectorAll('.retailer-block').forEach(function(block, idx) {
+        let check = block.querySelector('[type="checkbox"]');
+        if (check) data['in_stock'+idx] = check.checked;
+      });
+      localStorage.setItem('addDeviceForm', JSON.stringify(data));
+      // Переход по ссылке произойдет далее
+    });
+  });
+});
+</script>
+
+{% endblock %}

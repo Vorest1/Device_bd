@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Статистика по таблицам</h2>
+  <table class="table table-bordered w-auto">
+    <thead>
+      <tr>
+        <th>Таблица</th>
+        <th>Кол-во записей</th>
+        <th>Кол-во атрибутов</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for table in stats %}
+        <tr>
+          <td>{{ table }}</td>
+          <td>{{ stats[table] }}</td>
+          <td>{{ columns_count[table] }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3 class="mt-4">Анализ цен на устройства</h3>
+  <ul>
+    <li>
+      <b>Средняя цена устройства:</b> {{ avg_price }} ₽
+    </li>
+    <li>
+      <b>Минимальная цена:</b> {{ min_price }} ₽
+      <span class="dropdown">
+        <a class="btn btn-sm btn-outline-secondary dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+          Самые дешёвые устройства
+        </a>
+        <ul class="dropdown-menu">
+          {% for d in cheapest %}
+            <li>
+              <a class="dropdown-item" href="{{ url_for('device_detail', device_id=d[0]) }}">{{ d[1] }} — {{ d[2] }} ₽</a>
+            </li>
+          {% endfor %}
+        </ul>
+      </span>
+    </li>
+    <li>
+      <b>Максимальная цена:</b> {{ max_price }} ₽
+      <span class="dropdown">
+        <a class="btn btn-sm btn-outline-secondary dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+          Самые дорогие устройства
+        </a>
+        <ul class="dropdown-menu">
+          {% for d in expensive %}
+            <li>
+              <a class="dropdown-item" href="{{ url_for('device_detail', device_id=d[0]) }}">{{ d[1] }} — {{ d[2] }} ₽</a>
+            </li>
+          {% endfor %}
+        </ul>
+      </span>
+    </li>
+  </ul>
+
+  <ul class="mt-4">
+    <li><b>Устройств без технических характеристик:</b> {{ devices_without_specs }}</li>
+    <li><b>Устройств без водонепроницаемости:</b> {{ devices_without_waterproof }}</li>
+  </ul>
+{% endblock %}

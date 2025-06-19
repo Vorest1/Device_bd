@@ -1,0 +1,30 @@
+{% if results %}
+  <table class="table table-striped w-auto">
+    <thead>
+      <tr>
+        <th>Модель</th>
+        <th>Производитель</th>
+        <th>Категория</th>
+        <th>Страна</th>
+        <th>Цвет</th>
+        <th>Водонепр.</th>
+        <th>Память (Гб)</th>
+        <th>Тип накопителя</th>
+        <th>Модель процессора</th>
+        <th>Диагональ</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in results %}
+        <tr>
+          <td><a href="{{ url_for('device_detail', device_id=row[0]) }}">{{ row[1] }}</a></td>
+          {% for cell in row[2:] %}
+            <td>{{ cell }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <div class="alert alert-warning">Нет совпадений.</div>
+{% endif %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Все таблицы</h2>
+  <ul class="list-group">
+    {% for table in tables %}
+      <li class="list-group-item">
+        <a href="{{ url_for('table_view', table_name=table) }}">{{ table }}</a>
+      </li>
+    {% endfor %}
+  </ul>
+{% endblock %}

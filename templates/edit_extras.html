@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Дополнительные характеристики устройства</h2>
+<ul class="nav nav-tabs mb-3" id="extrasTabs" role="tablist">
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#specification">Specification</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#display">Display</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#camera">Camera</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#battery">Battery</button></li>
+</ul>
+<div class="tab-content">
+  <!-- Specification -->
+  <div class="tab-pane fade show active" id="specification">
+    <form method="POST">
+      <input type="hidden" name="tab" value="specification">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label>Модель процессора</label>
+          <select class="form-select" name="proc_model_id">
+            <option value="" selected>Не выбрано</option>
+            {% for m in proc_models %}
+              <option value="{{ m[0] }}" {% if spec and spec[2]==m[0] %}selected{% endif %}>{{ m[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label>Ядер</label>
+          <input type="number" class="form-control" name="processor_cores" min="1" max="20" value="{{ spec[3] if spec else '' }}">
+        </div>
+        <div class="col-md-2">
+          <label>RAM (Гб)</label>
+          <input type="number" class="form-control" name="ram_gb" min="1" max="32" value="{{ spec[4] if spec else '' }}">
+        </div>
+        <div class="col-md-2">
+          <label>Память (Гб)</label>
+          <input type="number" class="form-control" name="storage_gb" min="1" max="2048" value="{{ spec[5] if spec else '' }}">
+        </div>
+        <div class="col-md-2">
+          <label>Тип накопителя</label>
+          <select class="form-select" name="storage_type_id">
+            <option value="" selected>Не выбрано</option>
+            {% for st in storage_types %}
+              <option value="{{ st[0] }}" {% if spec and spec[6]==st[0] %}selected{% endif %}>{{ st[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="mt-3"><button class="btn btn-success">Сохранить</button></div>
+    </form>
+  </div>
+  <!-- Display -->
+  <div class="tab-pane fade" id="display">
+    <form method="POST">
+      <input type="hidden" name="tab" value="display">
+      <div class="row g-3">
+        <div class="col-md-2">
+          <label>Диагональ (дюйм)</label>
+          <input type="number" step="0.1" class="form-control" name="diagonal_inches" min="1.0" max="100.0" value="{{ display[2] if display else '' }}">
+        </div>
+        <div class="col-md-2">
+          <label>Разрешение</label>
+          <input type="text" class="form-control" name="resolution" minlength="7" maxlength="9" value="{{ display[3] if display else '' }}">
+        </div>
+        <div class="col-md-3">
+          <label>Технология матрицы</label>
+          <select class="form-select" name="techn_matr_id">
+            <option value="" selected>Не выбрано</option>
+            {% for tm in techn_matrices %}
+              <option value="{{ tm[0] }}" {% if display and display[4]==tm[0] %}selected{% endif %}>{{ tm[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label>Частота (Гц)</label>
+          <input type="number" class="form-control" name="refresh_rate_hz" min="1" max="360" value="{{ display[5] if display else '' }}">
+        </div>
+        <div class="col-md-2">
+          <label>Яркость (нит)</label>
+          <input type="number" class="form-control" name="brightness_nits" min="1" max="10000" value="{{ display[6] if display else '' }}">
+        </div>
+      </div>
+      <div class="mt-3"><button class="btn btn-success">Сохранить</button></div>
+    </form>
+  </div>
+  <!-- Camera -->
+  <div class="tab-pane fade" id="camera">
+    <form method="POST">
+      <input type="hidden" name="tab" value="camera">
+      <div class="row g-3">
+        <div class="col-md-2">
+          <label>Мпикс</label>
+          <input type="number" step="0.1" class="form-control" name="megapixels_main" min="2.0" max="33.0" value="{{ camera[2] if camera else '' }}">
+        </div>
+        <div class="col-md-2">
+          <label>Диафрагма</label>
+          <input type="text" class="form-control" name="aperture_main" minlength="3" maxlength="4" value="{{ camera[3] if camera else '' }}">
+        </div>
+        <div class="col-md-2">
+          <label>Зум</label>
+          <input type="number" step="0.1" class="form-control" name="optical_zoom_x" min="0.0" max="144.0" value="{{ camera[4] if camera else '' }}">
+        </div>
+        <div class="col-md-3">
+          <label>Видео</label>
+          <input type="text" class="form-control" name="video_resolution" minlength="7" maxlength="9" value="{{ camera[5] if camera else '' }}">
+        </div>
+        <div class="col-md-3">
+          <label>ИИ-улучшение</label>
+          <div class="form-check">
+            <input type="checkbox" class="form-check-input" name="has_ai_enhance" id="ai_enhance"
+                {% if camera and camera[6] == 1 %}checked{% endif %}>
+            <label for="ai_enhance" class="form-check-label">Да</label>
+          </div>
+        </div>
+      </div>
+      <div class="mt-3"><button class="btn btn-success">Сохранить</button></div>
+    </form>
+  </div>
+  <!-- Battery -->
+  <div class="tab-pane fade" id="battery">
+    <form method="POST">
+      <input type="hidden" name="tab" value="battery">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label>Ёмкость (мАч)</label>
+          <input type="number" class="form-control" name="capacity_mah" min="1" max="20000" value="{{ battery[2] if battery else '' }}">
+        </div>
+        <div class="col-md-3">
+          <label>Быстрая зарядка (Вт)</label>
+          <input type="number" step="0.1" class="form-control" name="fast_charging_w" min="0.0" max="20.0" value="{{ battery[3] if battery else '' }}">
+        </div>
+        <div class="col-md-3">
+          <label>Беспроводная зарядка</label>
+          <div class="form-check">
+            <input type="checkbox" class="form-check-input" name="wireless_charging" id="wireless_charging"
+                {% if battery and battery[4] == 1 %}checked{% endif %}>
+            <label for="wireless_charging" class="form-check-label">Да</label>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label>Время работы (ч)</label>
+          <input type="number" step="0.1" class="form-control" name="estimated_life_hours" min="0.0" max="96.0" value="{{ battery[5] if battery else '' }}">
+        </div>
+      </div>
+      <div class="mt-3"><button class="btn btn-success">Сохранить</button></div>
+    </form>
+  </div>
+</div>
+<a href="{{ url_for('device_detail', device_id=device_id) }}" class="btn btn-secondary mt-3">Назад к устройству</a>
+{% endblock %}

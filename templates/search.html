@@ -1,82 +1,133 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Поиск устройств по критериям</h2>
-  <form method="POST" id="search-form" class="row g-3">
-    <div class="col-md-3">
-      <label class="form-label">Категория</label>
-      <select class="form-select" name="category_id" id="category">
-        <option value="all" {% if selected_category == "all" %}selected{% endif %}>Все</option>
-        {% for cat in categories %}
-          <option value="{{ cat[0] }}" {% if selected_category == cat[0]|string %}selected{% endif %}>{{ cat[1] }}</option>
-        {% endfor %}
-      </select>
+  <h2>Поиск и справка</h2>
+  <!-- Вкладки -->
+  <ul class="nav nav-tabs mb-3" id="searchTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {% if mode == 'search' %}active{% endif %}" id="search-tab" data-bs-toggle="tab" data-bs-target="#search-pane" type="button" role="tab">Поиск устройств</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {% if mode == 'info' %}active{% endif %}" id="info-tab" data-bs-toggle="tab" data-bs-target="#info-pane" type="button" role="tab">Справка по БД</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {% if mode == 'filter' %}active{% endif %}" id="filter-tab" data-bs-toggle="tab" data-bs-target="#filter-pane" type="button" role="tab">Фильтрация по цене</button>
+    </li>
+  </ul>
+  <div class="tab-content">
+    <!-- Поиск устройств -->
+    <div class="tab-pane fade {% if mode == 'search' %}show active{% endif %}" id="search-pane" role="tabpanel">
+      <form method="POST" class="row g-3">
+        <input type="hidden" name="mode" value="search">
+        <div class="col-md-4">
+          <label class="form-label">Категория</label>
+          <select class="form-select" name="category_id" id="category">
+            <option value="all" {% if selected_category == "all" %}selected{% endif %}>Все</option>
+            {% for cat in categories %}
+              <option value="{{ cat[0] }}" {% if selected_category == cat[0]|string %}selected{% endif %}>{{ cat[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Производитель</label>
+          <select class="form-select" name="manufacturer_id" id="manufacturer">
+            <option value="all" {% if selected_manufacturer == "all" %}selected{% endif %}>Все</option>
+            {% for man in manufacturers %}
+              <option value="{{ man[0] }}" {% if selected_manufacturer == man[0]|string %}selected{% endif %}>{{ man[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Цвет</label>
+          <select class="form-select" name="color_id">
+            <option value="all" {% if selected_color == "all" %}selected{% endif %}>Все</option>
+            {% for color in colors %}
+              <option value="{{ color[0] }}" {% if selected_color == color[0]|string %}selected{% endif %}>{{ color[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-12 d-flex justify-content-end">
+          <button type="submit" class="btn btn-primary">Найти</button>
+        </div>
+      </form>
+      <hr>
+      {% if results is defined and mode == 'search' %}
+        {% set results = results %}
+        {% include 'search_results_table.html' %}
+      {% endif %}
     </div>
-    <div class="col-md-3">
-      <label class="form-label">Производитель</label>
-      <select class="form-select" name="manufacturer_id" id="manufacturer">
-        <option value="all" {% if selected_manufacturer == "all" %}selected{% endif %}>Все</option>
-        {% for man in manufacturers %}
-          <option value="{{ man[0] }}" {% if selected_manufacturer == man[0]|string %}selected{% endif %}>{{ man[1] }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Цвет</label>
-      <select class="form-select" name="color_id">
-        <option value="all" {% if selected_color == "all" %}selected{% endif %}>Все</option>
-        {% for color in colors %}
-          <option value="{{ color[0] }}" {% if selected_color == color[0]|string %}selected{% endif %}>{{ color[1] }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-1">
-      <label class="form-label">Цена от</label>
-      <input type="number" class="form-control" name="price_min" value="{{ price_min or '' }}">
-    </div>
-    <div class="col-md-1">
-      <label class="form-label">Цена до</label>
-      <input type="number" class="form-control" name="price_max" value="{{ price_max or '' }}">
-    </div>
-    <div class="col-md-1 d-flex align-items-end">
-      <button type="submit" class="btn btn-primary w-100">Найти</button>
-    </div>
-  </form>
-  <hr>
-  {% if results is defined %}
-    {% if results %}
-      <h4>Результаты поиска:</h4>
-      <table class="table table-striped w-auto">
-        <thead>
-          <tr>
-            <th>Модель</th>
-            <th>Производитель</th>
-            <th>Категория</th>
-            <th>Страна</th>
-            <th>Цена</th>
-            <th>Цвет</th>
-            <th>Водонепр.</th>
-            <th>Память (Гб)</th>
-            <th>Тип накопителя</th>
-            <th>Модель процессора</th>
-            <th>Диагональ</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in results %}
+
+    <!-- Справка по БД -->
+    <div class="tab-pane fade {% if mode == 'info' %}show active{% endif %}" id="info-pane" role="tabpanel">
+      <form method="POST" class="row g-3 mb-3">
+        <input type="hidden" name="mode" value="info">
+        <div class="col-md-4">
+          <label class="form-label">Группировать по:</label>
+          <select class="form-select" name="info_by">
+            <option value="retailer" {% if info_by == 'retailer' %}selected{% endif %}>Продавцу</option>
+            <option value="country" {% if info_by == 'country' %}selected{% endif %}>Стране</option>
+          </select>
+        </div>
+        <div class="col-md-12 d-flex justify-content-end">
+          <button type="submit" class="btn btn-info">Получить справку</button>
+        </div>
+      </form>
+      {% if info_results and mode == 'info' %}
+        <h5>Количество устройств по {% if info_by == 'retailer' %}продавцам{% else %}странам{% endif %}:</h5>
+        <table class="table table-bordered w-auto">
+          <thead>
             <tr>
-              <td>
-                <a href="{{ url_for('device_detail', device_id=row[0]) }}">{{ row[1] }}</a>
-              </td>
-              {% for cell in row[2:] %}
-                <td>{{ cell }}</td>
-              {% endfor %}
+              <th>{% if info_by == 'retailer' %}Продавец{% else %}Страна{% endif %}</th>
+              <th>Количество устройств</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p>Нет совпадений.</p>
-    {% endif %}
-  {% endif %}
+          </thead>
+          <tbody>
+            {% for row in info_results %}
+              <tr>
+                <td>{{ row[0] }}</td>
+                <td>{{ row[1] }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% elif mode == 'info' %}
+        <div class="alert alert-info">Здесь будет отображаться справка после выбора и нажатия "Получить справку".</div>
+      {% endif %}
+    </div>
+
+    <!-- Фильтрация по цене -->
+    <div class="tab-pane fade {% if mode == 'filter' %}show active{% endif %}" id="filter-pane" role="tabpanel">
+      <form method="POST" class="row g-3 mb-3">
+        <input type="hidden" name="mode" value="filter">
+        <div class="col-md-4">
+          <label class="form-label">Категория</label>
+          <select class="form-select" name="filter_category_id">
+            <option value="all" {% if filter_category_id == "all" %}selected{% endif %}>Все</option>
+            {% for cat in categories %}
+              <option value="{{ cat[0] }}" {% if filter_category_id == cat[0]|string %}selected{% endif %}>{{ cat[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+    
+        <div class="col-md-3">
+          <label class="form-label">Цена от (₽)</label>
+          <input type="number" class="form-control" name="price_min" value="{{ price_min_filter or '' }}" placeholder="Минимум">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Цена до (₽)</label>
+          <input type="number" class="form-control" name="price_max" value="{{ price_max_filter or '' }}" placeholder="Максимум">
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <button type="submit" class="btn btn-success w-100">Фильтровать</button>
+        </div>
+      </form>
+      {% if filter_results and mode == 'filter' %}
+        {% set results = filter_results %}
+        <h5>Результаты фильтрации:</h5>
+        {% include 'search_results_table.html' %}
+      {% elif mode == 'filter' %}
+        <div class="alert alert-info">Здесь появятся результаты после выбора и фильтрации.</div>
+      {% endif %}
+    </div>
+  </div>
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 {% endblock %}
