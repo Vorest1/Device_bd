@@ -6,7 +6,7 @@ import re
 
 app = Flask(__name__)
 app.secret_key = 'your-unique-secret-key-1234567890'
-DB_PATH = os.path.join(os.path.dirname(__file__), 'bd', '2lr.db')
+DB_PATH = os.path.join(os.path.dirname(__file__), 'db', '2lr.db')
 
 @app.route('/')
 def index():
