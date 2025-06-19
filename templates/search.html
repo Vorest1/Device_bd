@@ -16,44 +16,39 @@
   <div class="tab-content">
     <!-- Поиск устройств -->
     <div class="tab-pane fade {% if mode == 'search' %}show active{% endif %}" id="search-pane" role="tabpanel">
-      <form method="POST" class="row g-3">
-        <input type="hidden" name="mode" value="search">
+      <form id="auto-search-form" class="row g-3">
         <div class="col-md-4">
           <label class="form-label">Категория</label>
           <select class="form-select" name="category_id" id="category">
-            <option value="all" {% if selected_category == "all" %}selected{% endif %}>Все</option>
+            <option value="all">Все</option>
             {% for cat in categories %}
-              <option value="{{ cat[0] }}" {% if selected_category == cat[0]|string %}selected{% endif %}>{{ cat[1] }}</option>
+              <option value="{{ cat[0] }}">{{ cat[1] }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-md-4">
           <label class="form-label">Производитель</label>
-          <select class="form-select" name="manufacturer_id" id="manufacturer">
-            <option value="all" {% if selected_manufacturer == "all" %}selected{% endif %}>Все</option>
+          <select class="form-select" name="manufacturer_id" id="manufacturer" disabled>
+            <option value="all">Все</option>
             {% for man in manufacturers %}
-              <option value="{{ man[0] }}" {% if selected_manufacturer == man[0]|string %}selected{% endif %}>{{ man[1] }}</option>
+              <option value="{{ man[0] }}">{{ man[1] }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-md-4">
           <label class="form-label">Цвет</label>
-          <select class="form-select" name="color_id">
-            <option value="all" {% if selected_color == "all" %}selected{% endif %}>Все</option>
+          <select class="form-select" name="color_id" id="color" disabled>
+            <option value="all">Все</option>
             {% for color in colors %}
-              <option value="{{ color[0] }}" {% if selected_color == color[0]|string %}selected{% endif %}>{{ color[1] }}</option>
+              <option value="{{ color[0] }}">{{ color[1] }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-12 d-flex justify-content-end">
-          <button type="submit" class="btn btn-primary">Найти</button>
-        </div>
       </form>
       <hr>
-      {% if results is defined and mode == 'search' %}
-        {% set results = results %}
-        {% include 'search_results_table.html' %}
-      {% endif %}
+      <div id="search-results">
+        <!-- Автоматически заполняется через JS/AJAX -->
+      </div>
     </div>
 
     <!-- Справка по БД -->
@@ -129,5 +124,5 @@
       {% endif %}
     </div>
   </div>
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script src="{{ url_for('static', filename='search.js') }}"></script>
 {% endblock %}

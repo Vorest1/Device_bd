@@ -5,6 +5,7 @@
     <thead>
       <tr>
         <th>Таблица</th>
+        <th>Что содержит</th>
         <th>Кол-во записей</th>
         <th>Кол-во атрибутов</th>
       </tr>
@@ -13,6 +14,7 @@
       {% for table in stats %}
         <tr>
           <td>{{ table }}</td>
+          <td>{{ table_rus_names.get(table, '—') }}</td>
           <td>{{ stats[table] }}</td>
           <td>{{ columns_count[table] }}</td>
         </tr>

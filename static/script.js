@@ -1,3 +1,4 @@
+/*
 document.addEventListener('DOMContentLoaded', function() {
   const category = document.getElementById('category');
   const manufacturer = document.getElementById('manufacturer');
@@ -37,3 +38,4 @@ document.addEventListener('DOMContentLoaded', function() {
   if (manufacturer) manufacturer.addEventListener('change', updateFilters);
   updateFilters();
 });
+*/

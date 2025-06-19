@@ -365,6 +365,25 @@ def delete_device(device_id):
 
 @app.route('/statistic')
 def statistic():
+    table_rus_names = {
+        'country': 'Страны',
+        'proc_model': 'Модели процессоров',
+        'color': 'Цвета',
+        'techn_matr': 'Технология матрицы',
+        'storage_type': 'Тип накопителя',
+        'os_name': 'Названия ОС',
+        'categories': 'Категории устройств',
+        'manufacturers': 'Производители',
+        'operating_systems': 'Операционные системы',
+        'devices': 'Устройства',
+        'specifications': 'Характеристики памяти',
+        'displays': 'Характеристики экрана',
+        'cameras': 'Характеристики камеры',
+        'batteries': 'Характеристики батареи',
+        'retailers': 'Магазины-продавцы',
+        'device_retailers': 'Продажи устройств'
+    }
+
     stats = {}
     columns_count = {}
     with sqlite3.connect(DB_PATH) as conn:
@@ -427,7 +446,8 @@ def statistic():
         cheapest=cheapest,
         expensive=expensive,
         devices_without_specs=devices_without_specs,
-        devices_without_waterproof=devices_without_waterproof
+        devices_without_waterproof=devices_without_waterproof,
+        table_rus_names=table_rus_names
     )
 
 @app.route('/search', methods=['GET', 'POST'])
@@ -564,6 +584,46 @@ def search():
         price_max_filter=price_max_filter,
         filter_results=filter_results
     )
+
+@app.route('/api/auto_search')
+def api_auto_search():
+    category_id = request.args.get('category_id', "all")
+    manufacturer_id = request.args.get('manufacturer_id', "all")
+    color_id = request.args.get('color_id', "all")
+
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        query = '''
+            SELECT d.device_id, d.model, m.name as manufacturer, c.name as category, co.name as country,
+                   col.name as color,
+                   CASE d.is_waterproof WHEN 1 THEN 'Да' ELSE 'Нет' END as is_waterproof,
+                   s.storage_gb, st.name as storage_type, pm.name as processor_model,
+                   disp.diagonal_inches
+            FROM devices d
+            JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
+            JOIN categories c ON d.category_id = c.category_id
+            JOIN country co ON m.country_id = co.country_id
+            JOIN color col ON d.color_id = col.color_id
+            JOIN specifications s ON d.device_id = s.device_id
+            JOIN storage_type st ON s.storage_type_id = st.storage_type_id
+            JOIN proc_model pm ON s.proc_model_id = pm.proc_model_id
+            JOIN displays disp ON d.device_id = disp.device_id
+            WHERE 1=1
+        '''
+        params = []
+        if category_id != "all":
+            query += " AND d.category_id = ?"
+            params.append(category_id)
+        if manufacturer_id != "all":
+            query += " AND d.manufacturer_id = ?"
+            params.append(manufacturer_id)
+        if color_id != "all":
+            query += " AND d.color_id = ?"
+            params.append(color_id)
+        c.execute(query, params)
+        results = c.fetchall()
+    return render_template('search_results_table.html', results=results)
+
 
 @app.route('/api/filter_options')
 def api_filter_options():
