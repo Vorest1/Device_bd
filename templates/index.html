@@ -1,25 +1,58 @@
 {% extends "base.html" %}
 
 {% block content %}
-<style>
-  .button-wrapper {
-    display: flex;
-    justify-content: center; /* горизонтальный центр */
-    margin-top: 20px;
-  }
-  .btn-group-vertical > .btn {
-    margin-bottom: 10px;
-    min-width: 200px;
-  }
-</style>
-
-<div class="button-wrapper">
-  <div class="btn-group-vertical">
-    <a href="{{ url_for('add_device') }}" class="btn btn-primary">Добавить устройство</a>
-    <a href="{{ url_for('tables_list') }}" class="btn btn-primary">Просмотр таблиц</a>
-    <a href="{{ url_for('statistic') }}" class="btn btn-primary">Статистика</a>
-    <a href="{{ url_for('search') }}" class="btn btn-primary">Поиск</a>
-    <a href="{{ url_for('all_devices') }}" class="btn btn-primary">Все устройства</a>
+  <h2>О проекте</h2>
+  <div class="mb-4">
+    <p>
+      <strong>Device DB</strong> — информационная система для хранения, поиска и анализа современных электронных устройств.<br>
+      В базе хранятся данные о смартфонах, ноутбуках, смарт-часах и фотоаппаратах, их технических характеристиках, производителях, продавцах и другой справочной информации.<br>
+      Для возвращения на эту страницу - <strong>кликните на название проекта</strong> в левом верхнем углу.
+    </p>
+    <ul>
+      <li>Просмотр и добавление новых устройств</li>
+      <li>Гибкий поиск и фильтрация по категориям, брендам, ценам</li>
+      <li>Аналитика и отчёты по базе устройств</li>
+      <li>Доступ к просмотру всех справочников и таблиц</li>
+    </ul>
   </div>
-</div>
+  <h3>Сводная статистика</h3>
+  <div class="row">
+    <div class="col-md-6">
+      <ul class="list-group mb-3">
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          Всего устройств:
+          <span class="badge bg-primary rounded-pill">{{ stats.devices }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          Категорий устройств:
+          <span class="badge bg-secondary rounded-pill">{{ stats.categories }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          Производителей:
+          <span class="badge bg-secondary rounded-pill">{{ stats.manufacturers }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          Продавцов:
+          <span class="badge bg-secondary rounded-pill">{{ stats.retailers }}</span>
+        </li>
+      </ul>
+    </div>
+    <div class="col-md-6">
+      <ul class="list-group mb-3">
+        <li class="list-group-item">Средняя цена устройства: <strong>{{ avg_price }} ₽</strong></li>
+        <li class="list-group-item">
+          Последнее обновление базы: <strong>{{ last_update }}</strong>
+        </li>
+      </ul>
+      <!-- Кнопка добавления устройства -->
+      <div class="d-flex justify-content-center mt-2">
+        <a href="{{ url_for('add_device') }}" class="btn btn-success btn-lg">
+          <i class="bi bi-plus-lg"></i> Добавить устройство
+        </a>
+      </div>
+    </div>
+  </div>
+  <div class="alert alert-info mt-3">
+    Все функции доступны через верхнее меню. Начните с <a href="{{ url_for('all_devices') }}">просмотра всех устройств</a> или воспользуйтесь поиском.
+  </div>
 {% endblock %}

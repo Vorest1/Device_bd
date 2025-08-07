@@ -2,11 +2,20 @@
 {% block content %}
   <h2>Таблица: {{ table }}</h2>
 
-  {% set one_to_one = ['specifications', 'displays', 'cameras', 'batteries'] %}
-  {% set auxiliary = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color', 'os_name'] %}
+  <!--{% set one_to_one = ['specifications', 'displays', 'cameras', 'batteries'] %} -->
+  {% set auxiliary = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color', 'os_name', 'specifications', 'displays', 'cameras', 'batteries'] %}
 
   {% if table not in auxiliary and table not in one_to_one %}
-    <a href="{{ url_for('add_row', table_name=table) }}" class="btn btn-primary mb-2">Добавить запись</a>
+    {% if table == 'manufacturers' %}
+      <a href="{{ url_for('add_manufacturer', next=request.full_path) }}" class="btn btn-primary mb-2">Добавить производителя</a>
+    {% elif table == 'categories' %}
+      <a href="{{ url_for('add_category', next=request.full_path) }}" class="btn btn-primary mb-2">Добавить категорию</a>
+    {% elif table == 'retailers' %}
+      <a href="{{ url_for('add_retailer', next=request.full_path) }}" class="btn btn-primary mb-2">Добавить продавца</a>
+    {% elif table == 'os_name' %}
+      <a href="{{ url_for('add_os', next=request.full_path) }}" class="btn btn-primary mb-2">Добавить ОС</a>
+    {% endif %}
+
   {% endif %}
 
   <table class="table table-bordered table-sm">

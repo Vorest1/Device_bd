@@ -12,7 +12,14 @@
     <li class="nav-item" role="presentation">
       <button class="nav-link {% if mode == 'filter' %}active{% endif %}" id="filter-tab" data-bs-toggle="tab" data-bs-target="#filter-pane" type="button" role="tab">Фильтрация по цене</button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {% if mode == 'search1' %}active{% endif %}" id="search1-tab" data-bs-toggle="tab" data-bs-target="#search1-pane" type="button" role="tab">Поиск по 1 атрибуту</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {% if mode == 'search2' %}active{% endif %}" id="search2-tab" data-bs-toggle="tab" data-bs-target="#search2-pane" type="button" role="tab">Поиск по 2 атрибутам</button>
+    </li>
   </ul>
+
   <div class="tab-content">
     <!-- Поиск устройств -->
     <div class="tab-pane fade {% if mode == 'search' %}show active{% endif %}" id="search-pane" role="tabpanel">
@@ -91,7 +98,7 @@
 
     <!-- Фильтрация по цене -->
     <div class="tab-pane fade {% if mode == 'filter' %}show active{% endif %}" id="filter-pane" role="tabpanel">
-      <form method="POST" class="row g-3 mb-3">
+      <form method="POST" class="row g-3 mb-3" id="price-filter-form">
         <input type="hidden" name="mode" value="filter">
         <div class="col-md-4">
           <label class="form-label">Категория</label>
@@ -102,19 +109,33 @@
             {% endfor %}
           </select>
         </div>
-    
         <div class="col-md-3">
           <label class="form-label">Цена от (₽)</label>
-          <input type="number" class="form-control" name="price_min" value="{{ price_min_filter or '' }}" placeholder="Минимум">
+          <input type="number" class="form-control"
+                name="price_min"
+                id="price_min"
+                value="{{ price_min_filter or '' }}"
+                min="{{ min_price_in_db }}"
+                max="{{ max_price_in_db }}"
+                placeholder="{{ min_price_in_db }}">
         </div>
         <div class="col-md-3">
           <label class="form-label">Цена до (₽)</label>
-          <input type="number" class="form-control" name="price_max" value="{{ price_max_filter or '' }}" placeholder="Максимум">
+          <input type="number" class="form-control"
+                name="price_max"
+                id="price_max"
+                value="{{ price_max_filter or '' }}"
+                min="{{ min_price_in_db }}"
+                max="{{ max_price_in_db }}"
+                placeholder="{{ max_price_in_db }}">
         </div>
         <div class="col-md-2 d-flex align-items-end">
           <button type="submit" class="btn btn-success w-100">Фильтровать</button>
         </div>
       </form>
+      {% if error_message %}
+        <div class="alert alert-danger">{{ error_message }}</div>
+      {% endif %}
       {% if filter_results and mode == 'filter' %}
         {% set results = filter_results %}
         <h5>Результаты фильтрации:</h5>
@@ -123,6 +144,334 @@
         <div class="alert alert-info">Здесь появятся результаты после выбора и фильтрации.</div>
       {% endif %}
     </div>
+
+     <!-- Поиск по 1 атрибуту -->
+    <div class="tab-pane fade {% if mode == 'search1' %}show active{% endif %}" id="search1-pane" role="tabpanel">
+      <form method="POST" class="row g-3 mb-3">
+        <input type="hidden" name="mode" value="search1">
+        <div class="col-md-4">
+          <label class="form-label">Атрибут</label>
+          <select class="form-select" name="attribute1" id="attribute1" required>
+            <option value="" disabled selected>Выберите атрибут</option>
+            <option value="category" {% if selected_attr1 == 'category' %}selected{% endif %}>Категория</option>
+            <option value="manufacturer" {% if selected_attr1 == 'manufacturer' %}selected{% endif %}>Производитель</option>
+            <option value="color" {% if selected_attr1 == 'color' %}selected{% endif %}>Цвет</option>
+            <option value="storage_type" {% if selected_attr1 == 'storage_type' %}selected{% endif %}>Тип накопителя</option>
+            <option value="country" {% if selected_attr1 == 'country' %}selected{% endif %}>Страна</option>
+            <option value="retailer" {% if selected_attr1 == 'retailer' %}selected{% endif %}>Магазин</option>
+
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Значение</label>
+          <select class="form-select" name="value1" id="value1" required {% if not selected_attr1 %}disabled{% endif %}>
+            <!-- JS заполняет значения динамически! -->
+          </select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary w-100">Найти</button>
+        </div>
+      </form>
+
+      {% if mode == 'search1' %}
+        {% set results = results1 %}
+        {% if results %}
+          {% include 'search_results_table.html' %}
+        {% else %}
+          <div class="alert alert-info">Ничего не найдено или не выполнен поиск.</div>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    <!-- Поиск по 2 атрибутам -->
+    <div class="tab-pane fade {% if mode == 'search2' %}show active{% endif %}" id="search2-pane" role="tabpanel">
+      <form method="POST" class="row g-3 mb-3">
+        <input type="hidden" name="mode" value="search2">
+
+        <div class="col-md-3">
+          <label class="form-label">Атрибут 1</label>
+          <select class="form-select" name="attribute2a" id="attribute2a" required>
+            <option value="" disabled selected>Выберите атрибут</option>
+            <option value="category" {% if selected_attrX == 'category' %}selected{% endif %}>Категория</option>
+            <option value="manufacturer" {% if selected_attrX == 'manufacturer' %}selected{% endif %}>Производитель</option>
+            <option value="color" {% if selected_attrX == 'color' %}selected{% endif %}>Цвет</option>
+            <option value="storage_type" {% if selected_attrX == 'storage_type' %}selected{% endif %}>Тип накопителя</option>
+            <option value="country" {% if selected_attrX == 'country' %}selected{% endif %}>Страна</option>
+            <option value="retailer" {% if selected_attrX == 'retailer' %}selected{% endif %}>Магазин</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Значение 1</label>
+          <select class="form-select" name="value2a" id="value2a" required {% if not selected_attr2a %}disabled{% endif %}></select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Атрибут 2</label>
+          <select class="form-select" name="attribute2b" id="attribute2b" required>
+            <option value="" disabled selected>Выберите атрибут</option>
+            <option value="category" {% if selected_attrX == 'category' %}selected{% endif %}>Категория</option>
+            <option value="manufacturer" {% if selected_attrX == 'manufacturer' %}selected{% endif %}>Производитель</option>
+            <option value="color" {% if selected_attrX == 'color' %}selected{% endif %}>Цвет</option>
+            <option value="storage_type" {% if selected_attrX == 'storage_type' %}selected{% endif %}>Тип накопителя</option>
+            <option value="country" {% if selected_attrX == 'country' %}selected{% endif %}>Страна</option>
+            <option value="retailer" {% if selected_attrX == 'retailer' %}selected{% endif %}>Магазин</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Значение 2</label>
+          <select class="form-select" name="value2b" id="value2b" required {% if not selected_attr2b %}disabled{% endif %}></select>
+        </div>
+      </form>
+      <div id="search2results"></div>
+      {% if mode == 'search2' %}
+        {% set results = results2 %}
+        {% if results %}
+          {% include 'search_results_table.html' %}
+        {% else %}
+          <div class="alert alert-info">Ничего не найдено или не выполнен поиск.</div>
+        {% endif %}
+      {% endif %}
+      
+    </div>
+
   </div>
+
   <script src="{{ url_for('static', filename='search.js') }}"></script>
+  <script>
+document.addEventListener('DOMContentLoaded', function() {
+  const filterForm = document.getElementById('price-filter-form');
+  if (filterForm) {
+    filterForm.addEventListener('submit', function(e) {
+      const minInput = document.getElementById('price_min');
+      const maxInput = document.getElementById('price_max');
+      const minVal = minInput.value ? parseFloat(minInput.value) : null;
+      const maxVal = maxInput.value ? parseFloat(maxInput.value) : null;
+
+      // Если оба введены и min > max, показать ошибку
+      if (minVal !== null && maxVal !== null && minVal > maxVal) {
+        e.preventDefault();
+        // Вывод Bootstrap-ошибки
+        let alert = document.getElementById('price-alert');
+        if (!alert) {
+          alert = document.createElement('div');
+          alert.id = 'price-alert';
+          alert.className = 'alert alert-danger mt-2';
+          filterForm.parentNode.insertBefore(alert, filterForm.nextSibling);
+        }
+        alert.textContent = 'Минимальная цена не может быть больше максимальной!';
+        // Фокус на ошибочный input
+        minInput.focus();
+      } else {
+        // убрать ошибку при успехе
+        const alert = document.getElementById('price-alert');
+        if (alert) alert.remove();
+      }
+    });
+  }
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // --- Диапазон цены по категории ---
+  const categorySelect = document.querySelector('select[name="filter_category_id"]');
+  const minInput = document.getElementById('price_min');
+  const maxInput = document.getElementById('price_max');
+
+  async function updatePriceRange() {
+    const categoryId = categorySelect.value;
+    const resp = await fetch(`/api/category_price_range?category_id=${categoryId}`);
+    const data = await resp.json();
+
+    // Обновить min/max атрибуты и плейсхолдеры
+    minInput.min = data.min;
+    minInput.max = data.max;
+    minInput.placeholder = data.min;
+    if (minInput.value && (Number(minInput.value) < data.min || Number(minInput.value) > data.max)) minInput.value = "";
+
+    maxInput.min = data.min;
+    maxInput.max = data.max;
+    maxInput.placeholder = data.max;
+    if (maxInput.value && (Number(maxInput.value) < data.min || Number(maxInput.value) > data.max)) maxInput.value = "";
+
+    // Валидация: если min > max, сбрасываем
+    if (minInput.value && maxInput.value && Number(minInput.value) > Number(maxInput.value)) {
+      minInput.value = "";
+      maxInput.value = "";
+    }
+  }
+
+  if (categorySelect && minInput && maxInput) {
+    categorySelect.addEventListener('change', updatePriceRange);
+    // Инициализация при загрузке страницы (если не all)
+    updatePriceRange();
+  }
+});
+</script>
+
+
+<!-- Шаблоны скрытых select-ов -->
+<select id="category-template" style="display:none">
+  {% for cat in categories %}
+    <option value="{{ cat[0] }}">{{ cat[1] }}</option>
+  {% endfor %}
+</select>
+<select id="manufacturer-template" style="display:none">
+  {% for man in manufacturers %}
+    <option value="{{ man[0] }}">{{ man[1] }}</option>
+  {% endfor %}
+</select>
+<select id="color-template" style="display:none">
+  {% for color in colors %}
+    <option value="{{ color[0] }}">{{ color[1] }}</option>
+  {% endfor %}
+</select>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // ===== Для поиска по одному атрибуту =====
+  const attr1 = document.getElementById('attribute1');
+  const val1 = document.getElementById('value1');
+  if(attr1 && val1) {
+    function updateVal1() {
+      val1.disabled = !attr1.value;
+      val1.innerHTML = '';
+      if (!attr1.value) return;
+      fetch(`/api/attribute_values?attr=${attr1.value}`)
+        .then(resp => resp.json())
+        .then(data => {
+          data.forEach(opt => {
+            let option = document.createElement('option');
+            option.value = opt.id;
+            option.textContent = opt.name;
+            if ("{{ selected_value1 }}" === String(opt.id)) option.selected = true;
+            val1.appendChild(option);
+          });
+        });
+    }
+    attr1.addEventListener('change', updateVal1);
+    updateVal1();
+  }
+
+  // ===== Для поиска по двум атрибутам =====
+  function updateDisable2() {
+    // Блокировка одинаковых атрибутов
+    const a = document.getElementById('attribute2a');
+    const b = document.getElementById('attribute2b');
+    Array.from(a.options).forEach(opt => { opt.disabled = (opt.value && opt.value === b.value); });
+    Array.from(b.options).forEach(opt => { opt.disabled = (opt.value && opt.value === a.value); });
+  }
+
+  const attr2a = document.getElementById('attribute2a');
+  const val2a  = document.getElementById('value2a');
+  const attr2b = document.getElementById('attribute2b');
+  const val2b  = document.getElementById('value2b');
+
+  function updateVal2a() {
+    val2a.disabled = !attr2a.value;
+    val2a.innerHTML = '';
+    if (!attr2a.value) return;
+    fetch(`/api/attribute_values?attr=${attr2a.value}`)
+      .then(resp => resp.json())
+      .then(data => {
+        data.forEach(opt => {
+          let option = document.createElement('option');
+          option.value = opt.id;
+          option.textContent = opt.name;
+          if ("{{ selected_value2a }}" === String(opt.id)) option.selected = true;
+          val2a.appendChild(option);
+        });
+        // Сразу активируем поле 2, если есть выбранное
+        updateVal2b();
+      });
+  }
+
+  function updateVal2b() {
+    updateDisable2();
+    val2b.disabled = (!attr2b.value || !val2a.value);
+    val2b.innerHTML = '';
+
+    // Если поле недоступно, ставим только опцию "Все" и выходим
+    if (!attr2b.value || !val2a.value) {
+      let anyOption = document.createElement('option');
+      anyOption.value = "all";
+      anyOption.textContent = "Все";
+      anyOption.selected = true;
+      val2b.appendChild(anyOption);
+      return;
+    }
+
+    // Иначе делаем запрос на доступные значения и добавляем опцию "Все" первым пунктом
+    let anyOption = document.createElement('option');
+    anyOption.value = "all";
+    anyOption.textContent = "Все";
+    val2b.appendChild(anyOption);
+
+    fetch(`/api/attribute_values?attr=${attr2b.value}&other_attr=${attr2a.value}&other_val=${val2a.value}`)
+      .then(resp => resp.json())
+      .then(data => {
+        data.forEach(opt => {
+          let option = document.createElement('option');
+          option.value = opt.id;
+          option.textContent = opt.name;
+          // выбрано ли по умолчанию
+          if ("{{ selected_value2b|default('all') }}" === String(opt.id)) option.selected = true;
+          val2b.appendChild(option);
+        });
+        // Если selected_value2b не выбрано — по умолчанию "Все"
+        if (!val2b.value || val2b.value === "") val2b.value = "all";
+      });
+  }
+  
+  function tryAutoSearch2() {
+    const attrA = attr2a.value;
+    const valA = val2a.value;
+    const attrB = attr2b.value;
+    const valB = val2b.value;
+    if (attrA && attrB && valA && valB && attrA !== attrB) {
+      // Показываем спиннер или текст "Поиск..."
+      document.getElementById('search2results').innerHTML = '<div class="text-center">Поиск...</div>';
+      // AJAX-запрос (POST!)
+      fetch('/search?ajax=1', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `mode=search2&attribute2a=${attrA}&value2a=${valA}&attribute2b=${attrB}&value2b=${valB}`
+      })
+      .then(resp => resp.text())
+      .then(html => {
+        document.getElementById('search2results').innerHTML = html;
+      });
+    } else {
+      document.getElementById('search2results').innerHTML = '<div class="alert alert-info">Выберите разные атрибуты и их значения.</div>';
+    }
+  }
+
+  // Вызов при любом изменении значений
+  if(val2a) val2a.addEventListener('change', tryAutoSearch2);
+  if(val2b) val2b.addEventListener('change', tryAutoSearch2);
+
+  // Чтобы поиск работал и при изменении значений опций после смены атрибутов
+  if(attr2a) attr2a.addEventListener('change', tryAutoSearch2);
+  if(attr2b) attr2b.addEventListener('change', tryAutoSearch2);
+
+  if(attr2a && val2a) {
+    attr2a.addEventListener('change', function() {
+      updateDisable2();
+      updateVal2a();
+    });
+    val2a.addEventListener('change', function() {
+      updateDisable2();
+      updateVal2b();
+    });
+    updateVal2a();
+  }
+  if(attr2b && val2b) {
+    attr2b.addEventListener('change', function() {
+      updateDisable2();
+      updateVal2b();
+    });
+  }
+});
+</script>
+
+
 {% endblock %}

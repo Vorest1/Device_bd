@@ -90,3 +90,31 @@ document.addEventListener('DOMContentLoaded', function() {
   updateManufacturersAndColors();
   doSearch();
 });
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Для поиска по одному атрибуту
+  const attr1 = document.getElementById('attribute1');
+  const val1 = document.getElementById('value1');
+
+  // Элементы-источники для подстановки значений
+  const sourceCategory = document.getElementById('category-template');
+  const sourceManufacturer = document.getElementById('manufacturer-template');
+  const sourceColor = document.getElementById('color-template');
+
+  function updateValue1() {
+    let optionsSource;
+    if (attr1.value === 'category')      optionsSource = sourceCategory;
+    else if (attr1.value === 'manufacturer') optionsSource = sourceManufacturer;
+    else if (attr1.value === 'color')    optionsSource = sourceColor;
+
+    // Очищаем текущие значения
+    val1.innerHTML = '';
+    // Клонируем <option> из шаблона
+    Array.from(optionsSource.children).forEach(opt => {
+      val1.appendChild(opt.cloneNode(true));
+    });
+  }
+
+  attr1.addEventListener('change', updateValue1);
+  updateValue1(); // при загрузке страницы
+});

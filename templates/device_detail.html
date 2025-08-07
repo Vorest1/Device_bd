@@ -69,6 +69,8 @@
     <li><b>Частота обновления:</b> {{ display[3] }} Гц</li>
     <li><b>Яркость:</b> {{ display[4] }} нит</li>
   </ul>
+  {% else %}
+    <span class="text-muted">Не заполнено</span>
   {% endif %}
 
   {% if specs %}

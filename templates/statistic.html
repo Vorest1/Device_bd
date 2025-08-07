@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
   <h2>Статистика по таблицам</h2>
-  <table class="table table-bordered w-auto">
+  <table class="table table-bordered w-auto mb-4">
     <thead>
       <tr>
         <th>Таблица</th>
@@ -22,7 +22,9 @@
     </tbody>
   </table>
 
-  <h3 class="mt-4">Анализ цен на устройства</h3>
+  <hr class="my-4">
+
+  <h3>Анализ цен на устройства</h3>
   <ul>
     <li>
       <b>Средняя цена устройства:</b> {{ avg_price }} ₽
@@ -58,9 +60,48 @@
       </span>
     </li>
   </ul>
-
   <ul class="mt-4">
     <li><b>Устройств без технических характеристик:</b> {{ devices_without_specs }}</li>
     <li><b>Устройств без водонепроницаемости:</b> {{ devices_without_waterproof }}</li>
   </ul>
+
+  <hr class="my-4">
+
+  <h3>Статистика по категориям</h3>
+  <table class="table table-striped table-sm w-auto mb-4">
+    <thead>
+      <tr>
+        <th>Категория</th>
+        <th>Кол-во устройств</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cat in categories_stat %}
+        <tr>
+          <td>{{ cat[0] }}</td>
+          <td>{{ cat[1] }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <hr class="my-4">
+
+  <h3>Статистика по производителям</h3>
+  <table class="table table-striped table-sm w-auto mb-4">
+    <thead>
+      <tr>
+        <th>Производитель</th>
+        <th>Кол-во устройств</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for man in manufacturers_stat %}
+        <tr>
+          <td>{{ man[0] }}</td>
+          <td>{{ man[1] }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 {% endblock %}

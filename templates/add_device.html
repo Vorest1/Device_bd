@@ -58,7 +58,7 @@
     <div class="col-md-4">
       <label class="form-label">Дата выпуска</label>
       <input type="date" class="form-control" name="release_date"
-             min="1990-01-01" max="2025-05-31" required>
+             min="1990-01-01"  max="{{ today }}" required>
     </div>
     <!-- Текущая стоимость -->
     <div class="col-md-4">
@@ -130,7 +130,7 @@
         <div class="col-md-2">
           <label class="form-label">Последнее обновление</label>
           <input type="date" class="form-control" name="last_updated[]"
-             min="2016-01-01" max="2025-05-31" required>
+             min="2016-01-01" max="{{ today }}" required>
         </div>
         <div class="col-12">
           <button type="button" class="btn btn-outline-danger btn-sm remove-retailer-btn d-none">Удалить продавца</button>
@@ -175,7 +175,7 @@
         </div>
       </div>
       <div class="col-md-2">
-        <input type="date" class="form-control" name="last_updated[]" min="2016-01-01" max="2025-05-31" required placeholder="Последнее обновление">
+        <input type="date" class="form-control" name="last_updated[]" min="2016-01-01" max="{{ today }}" required placeholder="Последнее обновление">
       </div>
       <div class="col-12">
         <button type="button" class="btn btn-outline-danger btn-sm remove-retailer-btn">Удалить продавца</button>
