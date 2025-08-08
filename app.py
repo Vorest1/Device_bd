@@ -589,12 +589,15 @@ def search():
             elif mode == 'search1':
                 attr = request.form.get('attribute1')
                 val = request.form.get('value1')
+                # Пример для поиска по одному атрибуту (аналогично для двух)
                 query = '''
                     SELECT d.device_id, d.model, m.name as manufacturer, c.name as category,
                         col.name as color,
                         s.storage_gb, st.name as storage_type, pm.name as processor_model,
                         disp.diagonal_inches,
-                        d.current_price
+                        d.current_price,
+                        co.name as country,
+                        r.name as retailer
                     FROM devices d
                     JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
                     JOIN categories c ON d.category_id = c.category_id
@@ -603,23 +606,31 @@ def search():
                     LEFT JOIN storage_type st ON s.storage_type_id = st.storage_type_id
                     LEFT JOIN proc_model pm ON s.proc_model_id = pm.proc_model_id
                     LEFT JOIN displays disp ON d.device_id = disp.device_id
+                    LEFT JOIN manufacturers m2 ON d.manufacturer_id = m2.manufacturer_id
+                    LEFT JOIN country co ON m2.country_id = co.country_id
                     LEFT JOIN device_retailers dr ON d.device_id = dr.device_id
+                    LEFT JOIN retailers r ON dr.retailer_id = r.retailer_id
                     WHERE 1=1
                 '''
-                params = []
-                if attr == "category":
+
+                # Теперь добавляем фильтры по выбранному атрибуту (или двум)
+                if attr == "category" and val != "all":
                     query += " AND d.category_id = ?"
-                elif attr == "manufacturer":
+                elif attr == "manufacturer" and val != "all":
                     query += " AND d.manufacturer_id = ?"
-                elif attr == "color":
+                elif attr == "color" and val != "all":
                     query += " AND d.color_id = ?"
-                elif attr == "storage_type":
+                elif attr == "storage_type" and val != "all":
                     query += " AND s.storage_type_id = ?"
-                elif attr == "country":
-                    query += " AND m.country_id = ?"
-                elif attr == "retailer":
-                    query += " AND dr.retailer_id = ?"
-                params.append(val)
+                elif attr == "country" and val != "all":
+                    query += " AND co.country_id = ?"
+                elif attr == "retailer" and val != "all":
+                    query += " AND r.retailer_id = ?"
+                params = [val]  # или params.extend([val_a, val_b]) для поиска по двум атрибутам
+
+                # Важно! Это избавит от дублей:
+                query += " GROUP BY d.device_id"
+
                 c.execute(query, params)
                 results1 = c.fetchall()
 
@@ -629,12 +640,15 @@ def search():
                 val_a = request.form.get('value2a')
                 attr_b = request.form.get('attribute2b')
                 val_b = request.form.get('value2b')
+                # Пример для поиска по одному атрибуту (аналогично для двух)
                 query = '''
                     SELECT d.device_id, d.model, m.name as manufacturer, c.name as category,
                         col.name as color,
                         s.storage_gb, st.name as storage_type, pm.name as processor_model,
                         disp.diagonal_inches,
-                        d.current_price
+                        d.current_price,
+                        co.name as country,
+                        r.name as retailer
                     FROM devices d
                     JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
                     JOIN categories c ON d.category_id = c.category_id
@@ -643,38 +657,54 @@ def search():
                     LEFT JOIN storage_type st ON s.storage_type_id = st.storage_type_id
                     LEFT JOIN proc_model pm ON s.proc_model_id = pm.proc_model_id
                     LEFT JOIN displays disp ON d.device_id = disp.device_id
+                    LEFT JOIN manufacturers m2 ON d.manufacturer_id = m2.manufacturer_id
+                    LEFT JOIN country co ON m2.country_id = co.country_id
                     LEFT JOIN device_retailers dr ON d.device_id = dr.device_id
+                    LEFT JOIN retailers r ON dr.retailer_id = r.retailer_id
                     WHERE 1=1
                 '''
                 params = []
-                if attr_a == "category":
+                # Теперь добавляем фильтры по выбранному атрибуту (или двум)
+                if attr_a == "category" and val_a != "all":
                     query += " AND d.category_id = ?"
-                elif attr_a == "manufacturer":
+                    params.append(val_a)
+                elif attr_a == "manufacturer" and val_a != "all":
                     query += " AND d.manufacturer_id = ?"
-                elif attr_a == "color":
+                    params.append(val_a)
+                elif attr_a == "color" and val_a != "all":
                     query += " AND d.color_id = ?"
-                elif attr_a == "storage_type":
+                    params.append(val_a)
+                elif attr_a == "storage_type" and val_a != "all":
                     query += " AND s.storage_type_id = ?"
-                elif attr_a == "country":
-                    query += " AND m.country_id = ?"
-                elif attr_a == "retailer":
-                    query += " AND dr.retailer_id = ?"
-                params.append(val_a)
+                    params.append(val_a)
+                elif attr_a == "country" and val_a != "all":
+                    query += " AND co.country_id = ?"
+                    params.append(val_a)
+                elif attr_a == "retailer" and val_a != "all":
+                    query += " AND r.retailer_id = ?"
+                    params.append(val_a)
 
-                if attr_b and val_b and val_b != "all":
-                    if attr_b == "category":
-                        query += " AND d.category_id = ?"
-                    elif attr_b == "manufacturer":
-                        query += " AND d.manufacturer_id = ?"
-                    elif attr_b == "color":
-                        query += " AND d.color_id = ?"
-                    elif attr_b == "storage_type":
-                        query += " AND s.storage_type_id = ?"
-                    elif attr_b == "country":
-                        query += " AND m.country_id = ?"
-                    elif attr_b == "retailer":
-                        query += " AND dr.retailer_id = ?"
+                if attr_b == "category" and val_b != "all":
+                    query += " AND d.category_id = ?"
                     params.append(val_b)
+                elif attr_b == "manufacturer" and val_b != "all":
+                    query += " AND d.manufacturer_id = ?"
+                    params.append(val_b)
+                elif attr_b == "color" and val_b != "all":
+                    query += " AND d.color_id = ?"
+                    params.append(val_b)
+                elif attr_b == "storage_type" and val_b != "all":
+                    query += " AND s.storage_type_id = ?"
+                    params.append(val_b)
+                elif attr_b == "country" and val_b != "all":
+                    query += " AND co.country_id = ?"
+                    params.append(val_b)
+                elif attr_b == "retailer" and val_b != "all":
+                    query += " AND r.retailer_id = ?"
+                    params.append(val_b)
+
+                # Важно! Это избавит от дублей:
+                query += " GROUP BY d.device_id"
 
                 c.execute(query, params)
                 results2 = c.fetchall()
