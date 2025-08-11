@@ -1,5 +1,68 @@
 {% extends "base.html" %}
 {% block content %}
+{% if request.args.get('embedded') %}
+<style>
+  /* Убираем лишний «хром» внутри iframe */
+  .navbar, footer { display: none !important; }
+  .container, .container-fluid { max-width: 100% !important; padding: 0 !important; }
+  .card { box-shadow: none; border: 0; }
+  body { background: transparent; }
+</style>
+{% endif %}
+
+<!-- Модалка-предложение добавить доп.характеристики -->
+<div class="modal fade" id="extrasOfferModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Устройство добавлено</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Хотите добавить дополнительные характеристики сейчас?</p>
+        <ul class="list-group">
+          <li class="list-group-item d-flex justify-content-between">
+            Specification
+            {% if spec %}
+              <span class="badge bg-success">заполнено</span>
+            {% else %}
+              <span class="badge bg-secondary">не заполнено</span>
+            {% endif %}
+          </li>
+          <li class="list-group-item d-flex justify-content-between">
+            Display
+            {% if display %}
+              <span class="badge bg-success">заполнено</span>
+            {% else %}
+              <span class="badge bg-secondary">не заполнено</span>
+            {% endif %}
+          </li>
+          <li class="list-group-item d-flex justify-content-between">
+            Camera
+            {% if camera %}
+              <span class="badge bg-success">заполнено</span>
+            {% else %}
+              <span class="badge bg-secondary">не заполнено</span>
+            {% endif %}
+          </li>
+          <li class="list-group-item d-flex justify-content-between">
+            Battery
+            {% if battery %}
+              <span class="badge bg-success">заполнено</span>
+            {% else %}
+              <span class="badge bg-secondary">не заполнено</span>
+            {% endif %}
+          </li>
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <a href="{{ url_for('device_detail', device_id=device_id) }}" class="btn btn-outline-secondary">Позже</a>
+        <button type="button" id="startFillBtn" class="btn btn-primary" data-bs-dismiss="modal">Заполнить сейчас</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <h2>Дополнительные характеристики устройства</h2>
 <ul class="nav nav-tabs mb-3" id="extrasTabs" role="tablist">
   <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#specification">Specification</button></li>
@@ -144,5 +207,46 @@
     </form>
   </div>
 </div>
-<a href="{{ url_for('device_detail', device_id=device_id) }}" class="btn btn-secondary mt-3">Назад к устройству</a>
+<button type="button" class="btn btn-success"
+        onclick="if (window.parent && window.parent.finishExtras) {
+                   window.parent.finishExtras({{ device_id }});
+                 } else {
+                   // если страница открыта отдельно, а не в модалке
+                   window.location.href='{{ url_for('device_detail', device_id=device_id) }}?added=1';
+                 }">
+  Завершить
+</button>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // Показать модалку, если пришли с offer=1
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('offer')) {
+    const modal = new bootstrap.Modal(document.getElementById('extrasOfferModal'));
+    modal.show();
+  }
+
+  // Определить первую незаполненную вкладку
+  const firstIncomplete =
+    {% if not spec %}'specification'
+    {% elif not display %}'display'
+    {% elif not camera %}'camera'
+    {% elif not battery %}'battery'
+    {% else %}null{% endif %};
+
+  // Кнопка "Заполнить сейчас" — открыть первую незаполненную вкладку
+  const startBtn = document.getElementById('startFillBtn');
+  if (startBtn) {
+    startBtn.addEventListener('click', function () {
+      if (!firstIncomplete) return;
+      const trigger = document.querySelector(`[data-bs-target="#${firstIncomplete}"]`);
+      if (trigger) {
+        new bootstrap.Tab(trigger).show();
+        trigger.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  }
+});
+</script>
+
 {% endblock %}

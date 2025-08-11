@@ -9,16 +9,82 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='script.js') }}"></script>
   </head>
+  <!-- MODAL: Дополнительные характеристики -->
+  <div class="modal fade" id="extrasModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Дополнительные характеристики</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+        </div>
+        <div class="modal-body p-0" style="height: 75vh;">
+          <iframe id="extrasFrame" src="about:blank" style="border:0;width:100%;height:100%;"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const EXTRAS_URL_BASE = "{{ url_for('edit_extras', device_id=0) }}"; // /device/0/extras
+    let EXTRAS_CURRENT_DEVICE_ID = null;
+    let EXTRAS_FINISHING = false;
+
+    // Открыть окно доп.характеристик
+    window.openExtrasModal = function(deviceId) {
+      if (!deviceId) return;
+      EXTRAS_CURRENT_DEVICE_ID = deviceId;
+      const extrasUrl = EXTRAS_URL_BASE.replace(/\/\d+(?=\/extras)/, '/' + deviceId) + '?embedded=1';
+      document.getElementById('extrasFrame').src = extrasUrl;
+      new bootstrap.Modal(document.getElementById('extrasModal')).show();
+    };
+
+    // Завершить: закрыть окно и перейти на страницу устройства с msg
+    window.finishExtras = function(deviceId) {
+      deviceId = deviceId || EXTRAS_CURRENT_DEVICE_ID;
+      if (!deviceId) return;
+      EXTRAS_FINISHING = true;
+      EXTRAS_CURRENT_DEVICE_ID = null;
+
+      const base = "{{ url_for('device_detail', device_id=0) }}"; // /device/0
+      const target = base.replace(/\/0$/, '/' + deviceId) + '?added=1';
+
+      // закрываем модалку (если открыта) и переходим
+      const modalEl = document.getElementById('extrasModal');
+      const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      try { modal.hide(); } catch(e) {}
+      window.location.href = target;
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+      // авто-открытие после добавления: ?open_extras_for=<id>
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('open_extras_for');
+      if (id) openExtrasModal(id);
+
+      // если окно закрыли крестиком/по бэкдропу — делаем то же, что и "Завершить"
+      const modalEl = document.getElementById('extrasModal');
+      modalEl.addEventListener('hidden.bs.modal', function () {
+        if (!EXTRAS_FINISHING && EXTRAS_CURRENT_DEVICE_ID) {
+          // пользователь закрыл окно — считаем, что завершил
+          window.finishExtras(EXTRAS_CURRENT_DEVICE_ID);
+        }
+        EXTRAS_FINISHING = false;
+      });
+    });
+  </script>
+
+
   <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
       <div class="container-fluid">
         <a class="navbar-brand" href="{{ url_for('index') }}">Device DB</a>
         <div class="navbar-nav">
+          <a class="nav-link" href="{{ url_for('index') }}">Главная</a>
           <a class="nav-link" href="{{ url_for('tables_list') }}">Таблицы</a>
           <a class="nav-link" href="{{ url_for('statistic') }}">Статистика</a>
           <a class="nav-link" href="{{ url_for('search') }}">Поиск</a>
-          <a class="nav-link" href="{{ url_for('report') }}">Отчёт</a>
-          <a class="nav-link" href="{{ url_for('queries') }}">Запросы</a>
+          <!-- <a class="nav-link" href="{{ url_for('report') }}">Отчёт</a>
+          <a class="nav-link" href="{{ url_for('queries') }}">Запросы</a> -->
           <a class="nav-link" href="{{ url_for('all_devices') }}">Все устройства</a>
         </div>
       </div>

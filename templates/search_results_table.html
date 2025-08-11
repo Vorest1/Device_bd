@@ -6,15 +6,16 @@
         <th>Производитель</th>
         <th>Категория</th>
         <th>Цвет</th>
-        <th>Память (Гб)</th>
+        <th>Страна</th>
         <th>Тип накопителя</th>
         <th>Модель процессора</th>
-        <th>Диагональ</th>
+        <th>Матрица</th>
         <th>Цена</th>
       </tr>
     </thead>
     <tbody>
       {% for row in results %}
+        {# row: [0]=device_id, [1]=model, [2]=manufacturer, [3]=category, [4]=color, [5]=country, [6]=storage_type, [7]=processor_model, [8]=matrix_type, [9]=price #}
         <tr>
           <td><a href="{{ url_for('device_detail', device_id=row[0]) }}">{{ row[1] }}</a></td>
           <td>{{ row[2] }}</td>
@@ -30,5 +31,5 @@
     </tbody>
   </table>
 {% else %}
-  <div class="alert alert-warning">Нет совпадений.</div>
+  <div class="alert alert-info">Ничего не найдено.</div>
 {% endif %}

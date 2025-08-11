@@ -1,107 +1,243 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Статистика по таблицам</h2>
-  <table class="table table-bordered w-auto mb-4">
-    <thead>
-      <tr>
-        <th>Таблица</th>
-        <th>Что содержит</th>
-        <th>Кол-во записей</th>
-        <th>Кол-во атрибутов</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for table in stats %}
-        <tr>
-          <td>{{ table }}</td>
-          <td>{{ table_rus_names.get(table, '—') }}</td>
-          <td>{{ stats[table] }}</td>
-          <td>{{ columns_count[table] }}</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
 
-  <hr class="my-4">
+<style>
+  .kpi { border-radius: .8rem; padding: .8rem 1rem; border: 1px solid rgba(0,0,0,.08); }
+  .kpi h4 { margin: 0; font-size: 1.4rem; line-height: 1.1; }
+  .mini-bar { display: grid; grid-template-columns: 160px 1fr auto; gap: .75rem; align-items: center; }
+  .mini-bar .track { height: .75rem; background: rgba(0,0,0,.08); border-radius: .5rem; overflow: hidden; }
+  .mini-bar .bar { height: 100%; background: rgba(13,110,253,.7); }
+  .section-title { margin: 1.2rem 0 .6rem; }
+</style>
 
-  <h3>Анализ цен на устройства</h3>
-  <ul>
-    <li>
-      <b>Средняя цена устройства:</b> {{ avg_price }} ₽
-    </li>
-    <li>
-      <b>Минимальная цена:</b> {{ min_price }} ₽
-      <span class="dropdown">
-        <a class="btn btn-sm btn-outline-secondary dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-          Самые дешёвые устройства
-        </a>
-        <ul class="dropdown-menu">
-          {% for d in cheapest %}
-            <li>
-              <a class="dropdown-item" href="{{ url_for('device_detail', device_id=d[0]) }}">{{ d[1] }} — {{ d[2] }} ₽</a>
-            </li>
-          {% endfor %}
+<h2 class="mb-2">Статистика</h2>
+<p class="text-muted">Сведения о БД — на главной. Здесь аналитика и группировки по ключевым признакам.</p>
+
+<!-- KPI -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-4">
+    <div class="kpi text-center">
+      <small class="text-muted d-block">Средняя цена</small>
+      <h4>{{ avg_price }} ₽</h4>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi text-center">
+      <small class="text-muted d-block">Мин / Макс</small>
+      <h4>{{ min_price }} ₽ — {{ max_price }} ₽</h4>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="kpi">
+      <small class="text-muted d-block">Качество данных</small>
+      <div>Без спецификаций: <b>{{ devices_without_specs }}</b></div>
+      <div>Без водонепроницаемости: <b>{{ devices_without_waterproof }}</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- АНАЛИЗ ЦЕН -->
+<h5 class="section-title">Анализ цен</h5>
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="card-title">Границы и примеры</h6>
+        <ul class="mb-2">
+          <li><b>Средняя цена:</b> {{ avg_price }} ₽</li>
+          <li>
+            <b>Минимальная:</b> {{ min_price }} ₽
+            <span class="dropdown">
+              <a class="btn btn-sm btn-outline-secondary dropdown-toggle ms-1" href="#" role="button" data-bs-toggle="dropdown">Топ-5 самых дешёвых</a>
+              <ul class="dropdown-menu">
+                {% for d in cheapest %}
+                  <li><a class="dropdown-item" href="{{ url_for('device_detail', device_id=d[0]) }}">{{ d[1] }} — {{ d[2] }} ₽</a></li>
+                {% endfor %}
+              </ul>
+            </span>
+          </li>
+          <li>
+            <b>Максимальная:</b> {{ max_price }} ₽
+            <span class="dropdown">
+              <a class="btn btn-sm btn-outline-secondary dropdown-toggle ms-1" href="#" role="button" data-bs-toggle="dropdown">Топ-5 самых дорогих</a>
+              <ul class="dropdown-menu">
+                {% for d in expensive %}
+                  <li><a class="dropdown-item" href="{{ url_for('device_detail', device_id=d[0]) }}">{{ d[1] }} — {{ d[2] }} ₽</a></li>
+                {% endfor %}
+              </ul>
+            </span>
+          </li>
         </ul>
-      </span>
-    </li>
-    <li>
-      <b>Максимальная цена:</b> {{ max_price }} ₽
-      <span class="dropdown">
-        <a class="btn btn-sm btn-outline-secondary dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-          Самые дорогие устройства
-        </a>
-        <ul class="dropdown-menu">
-          {% for d in expensive %}
-            <li>
-              <a class="dropdown-item" href="{{ url_for('device_detail', device_id=d[0]) }}">{{ d[1] }} — {{ d[2] }} ₽</a>
-            </li>
+      </div>
+    </div>
+  </div>
+
+  <!-- Мини-графики -->
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="card-title">Наглядно</h6>
+        <div class="mb-2 fw-semibold">Топ-5 категорий по количеству устройств</div>
+        {% set max_cat = (top_cat|map(attribute=1)|list|max) if top_cat else 1 %}
+        <div class="vstack gap-2 mb-3">
+          {% for r in top_cat %}
+            <div class="mini-bar">
+              <div class="text-truncate">{{ r[0] }}</div>
+              <div class="track"><div class="bar" style="width: {{ (r[1] * 100 // (max_cat if max_cat>0 else 1)) }}%;"></div></div>
+              <div><small>{{ r[1] }}</small></div>
+            </div>
           {% endfor %}
-        </ul>
-      </span>
-    </li>
-  </ul>
-  <ul class="mt-4">
-    <li><b>Устройств без технических характеристик:</b> {{ devices_without_specs }}</li>
-    <li><b>Устройств без водонепроницаемости:</b> {{ devices_without_waterproof }}</li>
-  </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ГРАФИК ЦЕНОВОЙ ДИНАМИКИ: полная ширина -->
+<div class="row g-3 mb-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="card-title">Ценовая динамика: 4 категории (цены по возрастанию)</h6>
 
-  <hr class="my-4">
+        {% set W = 1000 %}   {# логическая ширина в viewBox #}
+        {% set H = 360 %}    {# логическая высота #}
+        {% set M = 48 %}     {# поле вокруг графика #}
+        {% set maxX = price_lines_max_x if price_lines_max_x > 1 else 1 %}
+        {% set maxY = price_lines_max_y if price_lines_max_y > 0 else 1 %}
+        {% set colors = ['#0d6efd','#198754','#dc3545','#6f42c1'] %}
 
-  <h3>Статистика по категориям</h3>
-  <table class="table table-striped table-sm w-auto mb-4">
-    <thead>
-      <tr>
-        <th>Категория</th>
-        <th>Кол-во устройств</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for cat in categories_stat %}
+        <div class="w-100">
+          <svg viewBox="0 0 {{ W }} {{ H }}" width="100%" height="360" role="img"
+               aria-label="Ценовая динамика по 4 категориям (возрастающая)">
+            <!-- Оси -->
+            <line x1="{{ M }}" y1="{{ H-M }}" x2="{{ W-M }}" y2="{{ H-M }}" stroke="#adb5bd"/>
+            <line x1="{{ M }}" y1="{{ M }}"   x2="{{ M }}"   y2="{{ H-M }}" stroke="#adb5bd"/>
+
+            <!-- Подписи осей -->
+            <text x="{{ (W/2)|int }}" y="{{ H-8 }}" text-anchor="middle" font-size="12" fill="#6c757d">
+              Ранг устройств (возрастание цены →)
+            </text>
+            <text x="18" y="{{ (H/2)|int }}" text-anchor="middle" font-size="12" fill="#6c757d"
+                  transform="rotate(-90, 18, {{ (H/2)|int }})">
+              Цена, ₽
+            </text>
+
+            <!-- Сетка по Y (4 линии) и подписи -->
+            {% for i in range(1,5) %}
+              {% set gy = M + (H - 2*M) * (4 - i) / 4 %}
+              <line x1="{{ M }}" y1="{{ gy }}" x2="{{ W-M }}" y2="{{ gy }}" stroke="#e9ecef"/>
+            {% endfor %}
+            {% for i in range(0,5) %}
+              {% set val = (i * maxY / 4)|int %}
+              {% set gy = H - M - (H - 2*M) * i / 4 %}
+              <text x="{{ M - 8 }}" y="{{ gy + 4 }}" text-anchor="end" font-size="10" fill="#6c757d">{{ val }}</text>
+            {% endfor %}
+
+            <!-- Шкала по X: 0%,25%,50%,75%,100% -->
+            {% for i in range(0,5) %}
+              {% set gx = M + (W - 2*M) * i / 4 %}
+              {% set label = 1 + ((i * (maxX - 1)) // 4) %}
+              <line x1="{{ gx }}" y1="{{ H-M }}" x2="{{ gx }}" y2="{{ H-M + 6 }}" stroke="#adb5bd"/>
+              <text x="{{ gx }}" y="{{ H-M + 18 }}" text-anchor="middle" font-size="10" fill="#6c757d">{{ label }}</text>
+            {% endfor %}
+
+            <!-- Линии категорий -->
+            {% for line in price_lines %}
+              {% set idx = loop.index0 %}
+              {% set color = colors[idx] %}
+              {% set d = [] %}
+              {% for p in line.prices %}
+                {% set x = M + ( (loop.index0) / (maxX - 1 if maxX>1 else 1) ) * (W - 2*M) %}
+                {% set y = H - M - ( (p / maxY) * (H - 2*M) ) %}
+                {% if loop.first %}
+                  {% set _ = d.append('M ' ~ x|round(2) ~ ' ' ~ y|round(2)) %}
+                {% else %}
+                  {% set _ = d.append('L ' ~ x|round(2) ~ ' ' ~ y|round(2)) %}
+                {% endif %}
+              {% endfor %}
+              <path d="{{ d|join(' ') }}" fill="none" stroke="{{ color }}" stroke-width="2"/>
+            {% endfor %}
+          </svg>
+        </div>
+
+        <!-- Легенда -->
+        <div class="mt-2 d-flex flex-wrap gap-3">
+          {% for line in price_lines %}
+            {% set color = colors[loop.index0] %}
+            <div class="d-flex align-items-center gap-2">
+              <span style="display:inline-block;width:18px;height:3px;background:{{ color }}"></span>
+              <span class="text-muted small">{{ line.name }}</span>
+            </div>
+          {% endfor %}
+        </div>
+
+        {% if not price_lines %}
+          <div class="alert alert-info mt-2 mb-0">Недостаточно данных по ценам для построения графика.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- СПРАВКА (ГРУППИРОВКИ) -->
+<h5 class="section-title">Справка (группировки)</h5>
+<form method="POST" class="row g-3 mb-2">
+  <div class="col-md-6">
+    <label class="form-label">Группировать по:</label>
+    <select class="form-select" name="info_by">
+      <option value="category"     {% if info_by == 'category' %}selected{% endif %}>Категории</option>
+      <option value="manufacturer" {% if info_by == 'manufacturer' %}selected{% endif %}>Производителю</option>
+      <option value="retailer"     {% if info_by == 'retailer' %}selected{% endif %}>Продавцу</option>
+      <option value="country"      {% if info_by == 'country' %}selected{% endif %}>Стране</option>
+    </select>
+  </div>
+  <div class="col-md-12 d-flex justify-content-end">
+    <button type="submit" class="btn btn-info">Показать</button>
+  </div>
+</form>
+
+{% if info_results %}
+  {% set name_col =
+      'Категория' if info_by == 'category'
+      else ('Производитель' if info_by == 'manufacturer'
+      else ('Продавец' if info_by == 'retailer'
+      else 'Страна')) %}
+  {% set instock_label = 'Предложений в наличии' if info_by == 'retailer' else 'В наличии' %}
+
+  <div class="table-responsive">
+    <table class="table table-bordered table-sm w-auto align-middle text-center">
+      <thead>
         <tr>
-          <td>{{ cat[0] }}</td>
-          <td>{{ cat[1] }}</td>
+          <th>{{ name_col }}</th>
+          <th>Устройств</th>
+          <th>{{ instock_label }}</th>
+          <th>Мин. цена</th>
+          <th>Средн. цена</th>
+          <th>Макс. цена</th>
         </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% set max_val = (info_results|map(attribute=1)|list|max) if info_results else 1 %}
+        {% for row in info_results %}
+          <tr>
+            <td class="text-start text-nowrap">{{ row[0] }}</td>
+            <td>
+              {{ row[1] }}
+              <div class="mini-bar" style="grid-template-columns: 1fr;">
+                <div class="track"><div class="bar" style="width: {{ (row[1] * 100 // (max_val if max_val>0 else 1)) }}%;"></div></div>
+              </div>
+            </td>
+            <td>{{ row[2] }}</td>
+            <td>{{ row[3] }}</td>
+            <td>{{ row[4] }}</td>
+            <td>{{ row[5] }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="alert alert-info">Выберите параметр и нажмите «Показать».</div>
+{% endif %}
 
-  <hr class="my-4">
-
-  <h3>Статистика по производителям</h3>
-  <table class="table table-striped table-sm w-auto mb-4">
-    <thead>
-      <tr>
-        <th>Производитель</th>
-        <th>Кол-во устройств</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for man in manufacturers_stat %}
-        <tr>
-          <td>{{ man[0] }}</td>
-          <td>{{ man[1] }}</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
 {% endblock %}

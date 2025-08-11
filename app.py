@@ -28,27 +28,132 @@ def safe_date(date_str, default_today=True):
 def index():
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        stats = {}
-        # Подсчёт основных сущностей
-        for table in ['devices', 'categories', 'manufacturers', 'retailers']:
-            c.execute(f"SELECT COUNT(*) FROM {table}")
-            stats[table] = c.fetchone()[0]
-        # Средняя цена
-        c.execute("SELECT AVG(current_price) FROM devices")
-        row = c.fetchone()
-        avg_price = int(row[0]) if row and row[0] else 0
-        # Последнее обновление (берём самую свежую дату обновления устройства или продавца)
+
+        # Базовые количества по ключевым справочникам
+        totals = {}
+        for t in ['devices', 'categories', 'manufacturers', 'retailers', 'color', 'country', 'os_name']:
+            c.execute(f"SELECT COUNT(*) FROM {t}")
+            totals[t] = c.fetchone()[0]
+
+        # Цены
+        c.execute("SELECT MIN(current_price), AVG(current_price), MAX(current_price) FROM devices")
+        price_min, price_avg, price_max = c.fetchone()
+        price_min = int(price_min) if price_min is not None else 0
+        price_avg = int(price_avg) if price_avg is not None else 0
+        price_max = int(price_max) if price_max is not None else 0
+
+        # Диапазон дат релиза устройств
+        c.execute("SELECT MIN(release_date), MAX(release_date) FROM devices")
+        release_min, release_max = c.fetchone()
+
+        # Последнее обновление данных продавцов
         c.execute("SELECT MAX(last_updated) FROM device_retailers")
-        last_update = c.fetchone()[0] or "нет данных"
-    return render_template('index.html',
-                           stats=stats,
-                           avg_price=avg_price,
-                           last_update=last_update)
+        last_update = c.fetchone()[0]
+
+        # В наличии и всего предложений
+        c.execute("SELECT COUNT(DISTINCT device_id) FROM device_retailers WHERE in_stock=1")
+        in_stock_devices = c.fetchone()[0] or 0
+        c.execute("SELECT COUNT(*) FROM device_retailers")
+        offers_total = c.fetchone()[0] or 0
+
+        # ---- СВОДКА ПО ТАБЛИЦАМ ----
+        # Назначение таблиц
+        purpose_map = {
+            'devices': 'главная',
+            'categories': 'справочник',
+            'manufacturers': 'справочник',
+            'retailers': 'справочник',
+            'color': 'справочник',
+            'country': 'справочник',
+            'os_name': 'справочник',
+            'proc_model': 'справочник',
+            'storage_type': 'справочник',
+            'techn_matr': 'справочник',
+            'device_retailers': 'дополнительная',
+            'batteries': 'дополнительная',
+            'cameras': 'дополнительная',
+            'displays': 'дополнительная',
+            'specifications': 'дополнительная',
+            'operating_systems': 'дополнительная',
+        }
+
+        # Русские описания «что содержит»
+        rus_desc = {
+            'batteries': 'Характеристики батареи',
+            'cameras': 'Характеристики камер',
+            'categories': 'Справочник категорий',
+            'color': 'Справочник цветов',
+            'country': 'Справочник стран',
+            'device_retailers': 'Цены/наличие у продавцов',
+            'devices': 'Устройства (основная)',
+            'displays': 'Характеристики дисплея',
+            'manufacturers': 'Справочник производителей',
+            'operating_systems': 'Версии ОС для устройств',
+            'os_name': 'Справочник названий ОС',
+            'proc_model': 'Модели процессоров',
+            'retailers': 'Справочник продавцов',
+            'specifications': 'Прочие характеристики',
+            'storage_type': 'Типы накопителей',
+            'techn_matr': 'Типы матрицы дисплея',
+        }
+
+
+        c.execute("""
+            SELECT name
+            FROM sqlite_master
+            WHERE type='table' AND name NOT LIKE 'sqlite_%'
+            ORDER BY name
+        """)
+        table_names = [r[0] for r in c.fetchall()]
+
+        tables_info = []
+        for name in table_names:
+            try:
+                c.execute(f"SELECT COUNT(*) FROM {name}")
+                rows = c.fetchone()[0] or 0
+            except Exception:
+                rows = 0
+            c.execute(f"PRAGMA table_info({name})")
+            cols = len(c.fetchall())
+            tables_info.append({
+                'name': name,
+                'rus': rus_desc.get(name, '—'),
+                'purpose': purpose_map.get(name, 'дополнительная'),
+                'rows': rows,
+                'columns': cols
+            })
+
+        # аккуратная сортировка: главная → справочники → дополнительные
+        order = {'главная': 0, 'справочник': 1, 'дополнительная': 2}
+        tables_info.sort(key=lambda x: (order.get(x['purpose'], 99), x['name']))
+
+    # Размер файла БД (может не сработать, если путь отличается)
+    try:
+        import os
+        db_size_mb = round(os.path.getsize(DB_PATH) / 1024 / 1024, 2)
+    except Exception:
+        db_size_mb = None
+
+    return render_template(
+        'index.html',
+        totals=totals,
+        price_min=price_min,
+        price_avg=price_avg,
+        price_max=price_max,
+        release_min=release_min,
+        release_max=release_max,
+        last_update=last_update,
+        in_stock_devices=in_stock_devices,
+        offers_total=offers_total,
+        db_size_mb=db_size_mb,
+        tables_info=tables_info
+    )
 
 
 @app.route('/add_device', methods=['GET', 'POST'])
 def add_device():
     message = ""
+    today = datetime.date.today()
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         # Получаем значения для списков
@@ -98,8 +203,8 @@ def add_device():
         for i in range(len(retailer_ids)):
             last_updated = last_updateds[i]
             # Сначала валидация диапазона (оригинальный формат HTML — YYYY-MM-DD)
-            if not ("2016-01-01" <= last_updated <= "2025-05-31"):
-                flash('Дата обновления у продавца должна быть c 01.01.2016 по 31.05.2025', 'danger')
+            if not ("2016-01-01" <= last_updated <= today.strftime("%Y-%m-%d")):
+                flash('Дата обновления у продавца должна быть c 01.01.2016 по текущий день', 'danger')
                 return redirect(url_for('add_device'))
             # Преобразуем для БД в YYYY.MM.DD
             last_updateds[i] = datetime.datetime.strptime(last_updated, "%Y-%m-%d").strftime("%Y.%m.%d")
@@ -114,7 +219,7 @@ def add_device():
             warranty_months = int(warranty_months)
             if not (1 <= warranty_months <= 24):
                 raise ValueError("warranty_months out of range")
-            if not ("1990-01-01" <= release_date <= "2025-05-31"):
+            if not ("1990-01-01" <= release_date <= today.strftime("%Y-%m-%d")):
                 raise ValueError("release_date out of range")
         except Exception as e:
             flash('Некорректные значения: ' + str(e), 'danger')
@@ -144,8 +249,8 @@ def add_device():
                     VALUES (?, ?, ?, ?, ?)
                 """, (device_id, retailer_ids[i], site_prices[i], in_stocks[i], last_updateds[i]))
             conn.commit()
-        flash('Устройство успешно добавлено!', 'success')
-        return redirect(url_for('device_detail', device_id=device_id))
+        flash('Устройство добавлено. При желании заполните дополнительные характеристики.', 'success')
+        return redirect(url_for('add_device', open_extras_for=device_id))
 
     # Ограничения по датам
     min_date = '1990-01-01'
@@ -247,7 +352,8 @@ def device_detail(device_id):
             WHERE device_id = ?
         """, (device_id,))
         camera = c.fetchone()
-        
+    if request.args.get('added'):
+        flash('Устройство добавлено', 'success')
     return render_template(
         "device_detail.html",
         device_id=device_id,
@@ -402,113 +508,249 @@ def delete_device(device_id):
     flash("Устройство и все связанные данные удалены", "success")
     return redirect(url_for('all_devices'))
 
-
-@app.route('/statistic')
+@app.route('/statistic', methods=['GET', 'POST'])
 def statistic():
-    table_rus_names = {
-        'country': 'Страны',
-        'proc_model': 'Модели процессоров',
-        'color': 'Цвета',
-        'techn_matr': 'Технология матрицы',
-        'storage_type': 'Тип накопителя',
-        'os_name': 'Названия ОС',
-        'categories': 'Категории устройств',
-        'manufacturers': 'Производители',
-        'operating_systems': 'Операционные системы',
-        'devices': 'Устройства',
-        'specifications': 'Характеристики памяти',
-        'displays': 'Характеристики экрана',
-        'cameras': 'Характеристики камеры',
-        'batteries': 'Характеристики батареи',
-        'retailers': 'Магазины-продавцы',
-        'device_retailers': 'Продажи устройств'
-    }
+    info_by = request.form.get('info_by') or request.args.get('info_by') or 'category'
 
-    stats = {}
-    columns_count = {}
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        # Получаем список всех таблиц (кроме системных)
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
-        tables = [row[0] for row in c.fetchall()]
-        
-        # Для каждой таблицы считаем количество записей и атрибутов
-        for table in tables:
-            c.execute(f"SELECT COUNT(*) FROM {table}")
-            stats[table] = c.fetchone()[0]
-            c.execute(f"PRAGMA table_info({table})")
-            columns_count[table] = len(c.fetchall())
 
-        # Средняя, минимальная, максимальная цена устройства
-        c.execute("SELECT AVG(current_price), MIN(current_price), MAX(current_price) FROM devices")
-        avg_price, min_price, max_price = c.fetchone()
-        avg_price = round(avg_price, 2) if avg_price else 0
-        min_price = round(min_price, 2) if min_price else 0
-        max_price = round(max_price, 2) if max_price else 0
-
-        # 5 самых дешевых устройств
+        # ---- KPI цен (по устройствам) ----
         c.execute("""
-            SELECT device_id, model, current_price
+            SELECT MIN(current_price), AVG(current_price), MAX(current_price)
             FROM devices
-            ORDER BY current_price ASC LIMIT 5
+            WHERE current_price IS NOT NULL
+        """)
+        min_p, avg_p, max_p = c.fetchone()
+        min_price = int(min_p) if min_p is not None else 0
+        avg_price = int(avg_p) if avg_p is not None else 0
+        max_price = int(max_p) if max_p is not None else 0
+
+        # Топ-5 дешёвых / дорогих устройств
+        c.execute("""
+            SELECT d.device_id, d.model, d.current_price
+            FROM devices d
+            WHERE d.current_price IS NOT NULL
+            ORDER BY d.current_price ASC
+            LIMIT 5
         """)
         cheapest = c.fetchall()
 
-        # 5 самых дорогих устройств
         c.execute("""
-            SELECT device_id, model, current_price
-            FROM devices
-            ORDER BY current_price DESC LIMIT 5
+            SELECT d.device_id, d.model, d.current_price
+            FROM devices d
+            WHERE d.current_price IS NOT NULL
+            ORDER BY d.current_price DESC
+            LIMIT 5
         """)
         expensive = c.fetchall()
 
-        # Количество устройств без технических характеристик
+        # ---- Контроль качества данных ----
         c.execute("""
-            SELECT COUNT(*) FROM devices d
-            LEFT JOIN specifications s ON d.device_id = s.device_id
+            SELECT COUNT(*)
+            FROM devices d
+            LEFT JOIN specifications s ON s.device_id = d.device_id
             WHERE s.device_id IS NULL
         """)
-        devices_without_specs = c.fetchone()[0]
+        devices_without_specs = c.fetchone()[0] or 0
 
-        # Количество устройств без водонепроницаемости
-        c.execute("SELECT COUNT(*) FROM devices WHERE is_waterproof = 0")
-        devices_without_waterproof = c.fetchone()[0]
+        try:
+            c.execute("SELECT COUNT(*) FROM devices WHERE COALESCE(is_waterproof, 0)=0")
+            devices_without_waterproof = c.fetchone()[0] or 0
+        except sqlite3.Error:
+            devices_without_waterproof = 0
 
-        # === Статистика по категориям ===
+        # ---- ГРУППИРОВКИ (без нулевых групп) ----
+        # Формат: (name, devices_count, in_stock_devices, min_price, avg_price, max_price)
+
+        # Категории: считаем по устройствам; "в наличии" — если есть хотя бы один оффер in_stock=1
         c.execute("""
-            SELECT c.name, COUNT(d.device_id)
+            WITH dr_any AS (
+              SELECT device_id, MAX(in_stock) AS in_stock_any
+              FROM device_retailers
+              GROUP BY device_id
+            )
+            SELECT c.name,
+                   COUNT(d.device_id)                                           AS devices_count,
+                   COUNT(CASE WHEN dr.in_stock_any=1 THEN d.device_id END)      AS in_stock_devices,
+                   MIN(d.current_price), AVG(d.current_price), MAX(d.current_price)
             FROM categories c
-            LEFT JOIN devices d ON c.category_id = d.category_id
+            LEFT JOIN devices d ON d.category_id = c.category_id
+            LEFT JOIN dr_any dr ON dr.device_id = d.device_id
             GROUP BY c.category_id, c.name
-            ORDER BY COUNT(d.device_id) DESC
+            HAVING COUNT(d.device_id) > 0
+            ORDER BY devices_count DESC, c.name
         """)
-        categories_stat = c.fetchall()
+        categories_stat = [
+            (r[0], r[1] or 0, r[2] or 0,
+             int(r[3]) if r[3] is not None else 0,
+             int(r[4]) if r[4] is not None else 0,
+             int(r[5]) if r[5] is not None else 0)
+            for r in c.fetchall()
+        ]
 
-        # === Статистика по производителям ===
+        # Производители
         c.execute("""
-            SELECT m.name, COUNT(d.device_id)
+            WITH dr_any AS (
+              SELECT device_id, MAX(in_stock) AS in_stock_any
+              FROM device_retailers
+              GROUP BY device_id
+            )
+            SELECT m.name,
+                   COUNT(d.device_id)                                           AS devices_count,
+                   COUNT(CASE WHEN dr.in_stock_any=1 THEN d.device_id END)      AS in_stock_devices,
+                   MIN(d.current_price), AVG(d.current_price), MAX(d.current_price)
             FROM manufacturers m
-            LEFT JOIN devices d ON m.manufacturer_id = d.manufacturer_id
+            LEFT JOIN devices d ON d.manufacturer_id = m.manufacturer_id
+            LEFT JOIN dr_any dr ON dr.device_id = d.device_id
             GROUP BY m.manufacturer_id, m.name
-            ORDER BY COUNT(d.device_id) DESC
+            HAVING COUNT(d.device_id) > 0
+            ORDER BY devices_count DESC, m.name
         """)
-        manufacturers_stat = c.fetchall()
+        manufacturers_stat = [
+            (r[0], r[1] or 0, r[2] or 0,
+             int(r[3]) if r[3] is not None else 0,
+             int(r[4]) if r[4] is not None else 0,
+             int(r[5]) if r[5] is not None else 0)
+            for r in c.fetchall()
+        ]
 
+        # Страны — через производителей, без нулевых
+        c.execute("""
+            WITH dr_any AS (
+              SELECT device_id, MAX(in_stock) AS in_stock_any
+              FROM device_retailers
+              GROUP BY device_id
+            )
+            SELECT co.name,
+                   COUNT(d.device_id)                                           AS devices_count,
+                   COUNT(CASE WHEN dr.in_stock_any=1 THEN d.device_id END)      AS in_stock_devices,
+                   MIN(d.current_price), AVG(d.current_price), MAX(d.current_price)
+            FROM country co
+            LEFT JOIN manufacturers m ON m.country_id      = co.country_id
+            LEFT JOIN devices d       ON d.manufacturer_id = m.manufacturer_id
+            LEFT JOIN dr_any dr       ON dr.device_id      = d.device_id
+            GROUP BY co.country_id, co.name
+            HAVING COUNT(d.device_id) > 0
+            ORDER BY devices_count DESC, co.name
+        """)
+        countries_stat = [
+            (r[0], r[1] or 0, r[2] or 0,
+             int(r[3]) if r[3] is not None else 0,
+             int(r[4]) if r[4] is not None else 0,
+             int(r[5]) if r[5] is not None else 0)
+            for r in c.fetchall()
+        ]
+
+        # Продавцы — уникальные устройства у продавца; "в наличии" у этого продавца; только не нулевые
+        c.execute("""
+            SELECT r.name,
+                   COUNT(DISTINCT dr.device_id)                                  AS devices_count,
+                   COUNT(DISTINCT CASE WHEN dr.in_stock=1 THEN dr.device_id END) AS in_stock_devices,
+                   MIN(dr.price), AVG(dr.price), MAX(dr.price)
+            FROM retailers r
+            LEFT JOIN device_retailers dr ON dr.retailer_id = r.retailer_id
+            GROUP BY r.retailer_id, r.name
+            HAVING COUNT(DISTINCT dr.device_id) > 0
+            ORDER BY devices_count DESC, r.name
+        """)
+        retailers_stat = [
+            (r[0], r[1] or 0, r[2] or 0,
+             int(r[3]) if r[3] is not None else 0,
+             int(r[4]) if r[4] is not None else 0,
+             int(r[5]) if r[5] is not None else 0)
+            for r in c.fetchall()
+        ]
+
+        # ---- Какая группировка активна сейчас
+        if info_by == 'manufacturer':
+            info_results = manufacturers_stat
+        elif info_by == 'retailer':
+            info_results = retailers_stat
+        elif info_by == 'country':
+            info_results = countries_stat
+        else:
+            info_by = 'category'
+            info_results = categories_stat
+
+        # ---- Данные для графика ценовой динамики (4 категории, цены отсортированы по убыванию) ----
+        c.execute("""
+            SELECT c.category_id, c.name, COUNT(d.device_id) AS cnt
+            FROM categories c
+            JOIN devices d ON d.category_id = c.category_id AND d.current_price IS NOT NULL
+            GROUP BY c.category_id, c.name
+            ORDER BY cnt DESC, c.name
+            LIMIT 4
+        """)
+        top4 = c.fetchall()
+
+        price_lines = []   # [{ 'name': str, 'prices': [int, ...] }, ...]
+        max_series_len = 0
+        max_series_price = 0
+
+        for cat_id, cat_name, _ in top4:
+            c.execute("""
+                SELECT current_price
+                FROM devices
+                WHERE category_id = ? AND current_price IS NOT NULL
+                ORDER BY current_price DESC
+            """, (cat_id,))
+            prices = [int(row[0]) for row in c.fetchall()]
+            # ограничим точки для читаемости, например 60
+            prices = prices[:60]
+            if prices:
+                price_lines.append({'name': cat_name, 'prices': prices})
+                if len(prices) > max_series_len:
+                    max_series_len = len(prices)
+                if max(prices) > max_series_price:
+                    max_series_price = max(prices)
+    
+    c.execute("""
+        SELECT c.category_id, c.name, COUNT(d.device_id) AS cnt
+        FROM categories c
+        JOIN devices d ON d.category_id = c.category_id AND d.current_price IS NOT NULL
+        GROUP BY c.category_id, c.name
+        ORDER BY cnt DESC, c.name
+        LIMIT 4
+    """)
+    top4 = c.fetchall()
+
+    price_lines = []
+    max_series_len = 0
+    max_series_price = 0
+
+    for cat_id, cat_name, _ in top4:
+        c.execute("""
+            SELECT current_price
+            FROM devices
+            WHERE category_id = ? AND current_price IS NOT NULL
+            ORDER BY current_price ASC   -- было DESC, теперь ASC
+        """, (cat_id,))
+        prices = [int(row[0]) for row in c.fetchall()]
+        prices = prices[:60]  # ограничим точки для читаемости
+        if prices:
+            price_lines.append({'name': cat_name, 'prices': prices})
+            if len(prices) > max_series_len:
+                max_series_len = len(prices)
+            mp = max(prices)
+            if mp > max_series_price:
+                max_series_price = mp
     return render_template(
-        "statistic.html",
-        stats=stats,
-        columns_count=columns_count,
-        avg_price=avg_price,
-        min_price=min_price,
-        max_price=max_price,
-        cheapest=cheapest,
-        expensive=expensive,
+        'statistic.html',
+        info_by=info_by,
+        info_results=info_results,
+        min_price=min_price, avg_price=avg_price, max_price=max_price,
+        cheapest=cheapest, expensive=expensive,
         devices_without_specs=devices_without_specs,
         devices_without_waterproof=devices_without_waterproof,
-        table_rus_names=table_rus_names,
-        categories_stat=categories_stat,
-        manufacturers_stat=manufacturers_stat
+        # данные для мини-графика категорий (можно оставить, если используете)
+        top_cat=[(r[0], r[1]) for r in categories_stat[:5]],
+        # данные для нового многосерийного графика
+        price_lines=price_lines,
+        price_lines_max_x=max_series_len if max_series_len else 1,
+        price_lines_max_y=max_series_price if max_series_price else 1
     )
+
 
 @app.route('/search', methods=['GET', 'POST'])
 def search():
@@ -517,17 +759,8 @@ def search():
     info_results = None
     results = None
     filter_results = None
-    results1 = None
-    results2 = None
     error_message = None
     
-    selected_attr1 = request.form.get('attribute1')
-    selected_value1 = request.form.get('value1')
-    selected_attr2a = request.form.get('attribute2a')
-    selected_value2a = request.form.get('value2a')
-    selected_attr2b = request.form.get('attribute2b')
-    selected_value2b = request.form.get('value2b')
-
     selected_category = "all"
     selected_manufacturer = "all"
     selected_color = "all"
@@ -557,21 +790,29 @@ def search():
                 selected_manufacturer = request.form.get('manufacturer_id', "all")
                 selected_color = request.form.get('color_id', "all")
                 query = '''
-                    SELECT d.device_id, d.model, m.name as manufacturer, c.name as category,
-                           col.name as color,
-                           s.storage_gb, st.name as storage_type, pm.name as processor_model,
-                           disp.diagonal_inches,
-                           d.current_price
-                    FROM devices d
-                    JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
-                    JOIN categories c ON d.category_id = c.category_id
-                    JOIN color col ON d.color_id = col.color_id
-                    LEFT JOIN specifications s ON d.device_id = s.device_id
-                    LEFT JOIN storage_type st ON s.storage_type_id = st.storage_type_id
-                    LEFT JOIN proc_model pm ON s.proc_model_id = pm.proc_model_id
-                    LEFT JOIN displays disp ON d.device_id = disp.device_id
-                    WHERE 1=1
-                '''
+                        SELECT
+                            d.device_id,
+                            d.model,
+                            m.name  AS manufacturer,
+                            c.name  AS category,
+                            col.name AS color,
+                            co.name AS country,
+                            st.name AS storage_type,
+                            pm.name AS proc_model,
+                            tm.name AS techn_matr,
+                            d.current_price
+                        FROM devices d
+                        JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
+                        JOIN categories    c ON d.category_id     = c.category_id
+                        JOIN color       col ON d.color_id        = col.color_id
+                        LEFT JOIN specifications s  ON d.device_id    = s.device_id
+                        LEFT JOIN storage_type   st ON s.storage_type_id = st.storage_type_id
+                        LEFT JOIN proc_model     pm ON s.proc_model_id   = pm.proc_model_id
+                        LEFT JOIN displays     disp ON d.device_id       = disp.device_id
+                        LEFT JOIN techn_matr     tm ON disp.techn_matr_id = tm.techn_matr_id
+                        LEFT JOIN country        co ON m.country_id       = co.country_id
+                        WHERE 1=1
+                    '''
                 params = []
                 if selected_category != "all":
                     query += " AND d.category_id = ?"
@@ -591,27 +832,29 @@ def search():
                 val = request.form.get('value1')
                 # Пример для поиска по одному атрибуту (аналогично для двух)
                 query = '''
-                    SELECT d.device_id, d.model, m.name as manufacturer, c.name as category,
-                        col.name as color,
-                        s.storage_gb, st.name as storage_type, pm.name as processor_model,
-                        disp.diagonal_inches,
-                        d.current_price,
-                        co.name as country,
-                        r.name as retailer
-                    FROM devices d
-                    JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
-                    JOIN categories c ON d.category_id = c.category_id
-                    JOIN color col ON d.color_id = col.color_id
-                    LEFT JOIN specifications s ON d.device_id = s.device_id
-                    LEFT JOIN storage_type st ON s.storage_type_id = st.storage_type_id
-                    LEFT JOIN proc_model pm ON s.proc_model_id = pm.proc_model_id
-                    LEFT JOIN displays disp ON d.device_id = disp.device_id
-                    LEFT JOIN manufacturers m2 ON d.manufacturer_id = m2.manufacturer_id
-                    LEFT JOIN country co ON m2.country_id = co.country_id
-                    LEFT JOIN device_retailers dr ON d.device_id = dr.device_id
-                    LEFT JOIN retailers r ON dr.retailer_id = r.retailer_id
-                    WHERE 1=1
-                '''
+                        SELECT
+                            d.device_id,
+                            d.model,
+                            m.name  AS manufacturer,
+                            c.name  AS category,
+                            col.name AS color,
+                            co.name AS country,
+                            st.name AS storage_type,
+                            pm.name AS proc_model,
+                            tm.name AS techn_matr,
+                            d.current_price
+                        FROM devices d
+                        JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
+                        JOIN categories    c ON d.category_id     = c.category_id
+                        JOIN color       col ON d.color_id        = col.color_id
+                        LEFT JOIN specifications s  ON d.device_id    = s.device_id
+                        LEFT JOIN storage_type   st ON s.storage_type_id = st.storage_type_id
+                        LEFT JOIN proc_model     pm ON s.proc_model_id   = pm.proc_model_id
+                        LEFT JOIN displays     disp ON d.device_id       = disp.device_id
+                        LEFT JOIN techn_matr     tm ON disp.techn_matr_id = tm.techn_matr_id
+                        LEFT JOIN country        co ON m.country_id       = co.country_id
+                        WHERE 1=1
+                    '''
 
                 # Теперь добавляем фильтры по выбранному атрибуту (или двум)
                 if attr == "category" and val != "all":
@@ -642,27 +885,29 @@ def search():
                 val_b = request.form.get('value2b')
                 # Пример для поиска по одному атрибуту (аналогично для двух)
                 query = '''
-                    SELECT d.device_id, d.model, m.name as manufacturer, c.name as category,
-                        col.name as color,
-                        s.storage_gb, st.name as storage_type, pm.name as processor_model,
-                        disp.diagonal_inches,
-                        d.current_price,
-                        co.name as country,
-                        r.name as retailer
-                    FROM devices d
-                    JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
-                    JOIN categories c ON d.category_id = c.category_id
-                    JOIN color col ON d.color_id = col.color_id
-                    LEFT JOIN specifications s ON d.device_id = s.device_id
-                    LEFT JOIN storage_type st ON s.storage_type_id = st.storage_type_id
-                    LEFT JOIN proc_model pm ON s.proc_model_id = pm.proc_model_id
-                    LEFT JOIN displays disp ON d.device_id = disp.device_id
-                    LEFT JOIN manufacturers m2 ON d.manufacturer_id = m2.manufacturer_id
-                    LEFT JOIN country co ON m2.country_id = co.country_id
-                    LEFT JOIN device_retailers dr ON d.device_id = dr.device_id
-                    LEFT JOIN retailers r ON dr.retailer_id = r.retailer_id
-                    WHERE 1=1
-                '''
+                        SELECT
+                            d.device_id,
+                            d.model,
+                            m.name  AS manufacturer,
+                            c.name  AS category,
+                            col.name AS color,
+                            co.name AS country,
+                            st.name AS storage_type,
+                            pm.name AS proc_model,
+                            tm.name AS techn_matr,
+                            d.current_price
+                        FROM devices d
+                        JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
+                        JOIN categories    c ON d.category_id     = c.category_id
+                        JOIN color       col ON d.color_id        = col.color_id
+                        LEFT JOIN specifications s  ON d.device_id    = s.device_id
+                        LEFT JOIN storage_type   st ON s.storage_type_id = st.storage_type_id
+                        LEFT JOIN proc_model     pm ON s.proc_model_id   = pm.proc_model_id
+                        LEFT JOIN displays     disp ON d.device_id       = disp.device_id
+                        LEFT JOIN techn_matr     tm ON disp.techn_matr_id = tm.techn_matr_id
+                        LEFT JOIN country        co ON m.country_id       = co.country_id
+                        WHERE 1=1
+                    '''
                 params = []
                 # Теперь добавляем фильтры по выбранному атрибуту (или двум)
                 if attr_a == "category" and val_a != "all":
@@ -755,19 +1000,27 @@ def search():
 
                 if not error_message:
                     query = '''
-                        SELECT d.device_id, d.model, m.name as manufacturer, c.name as category,
-                               col.name as color,
-                               s.storage_gb, st.name as storage_type, pm.name as processor_model,
-                               disp.diagonal_inches,
-                               d.current_price
+                        SELECT
+                            d.device_id,
+                            d.model,
+                            m.name  AS manufacturer,
+                            c.name  AS category,
+                            col.name AS color,
+                            co.name AS country,
+                            st.name AS storage_type,
+                            pm.name AS proc_model,
+                            tm.name AS techn_matr,
+                            d.current_price
                         FROM devices d
                         JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
-                        JOIN categories c ON d.category_id = c.category_id
-                        JOIN color col ON d.color_id = col.color_id
-                        LEFT JOIN specifications s ON d.device_id = s.device_id
-                        LEFT JOIN storage_type st ON s.storage_type_id = st.storage_type_id
-                        LEFT JOIN proc_model pm ON s.proc_model_id = pm.proc_model_id
-                        LEFT JOIN displays disp ON d.device_id = disp.device_id
+                        JOIN categories    c ON d.category_id     = c.category_id
+                        JOIN color       col ON d.color_id        = col.color_id
+                        LEFT JOIN specifications s  ON d.device_id    = s.device_id
+                        LEFT JOIN storage_type   st ON s.storage_type_id = st.storage_type_id
+                        LEFT JOIN proc_model     pm ON s.proc_model_id   = pm.proc_model_id
+                        LEFT JOIN displays     disp ON d.device_id       = disp.device_id
+                        LEFT JOIN techn_matr     tm ON disp.techn_matr_id = tm.techn_matr_id
+                        LEFT JOIN country        co ON m.country_id       = co.country_id
                         WHERE 1=1
                     '''
                     params = []
@@ -785,30 +1038,31 @@ def search():
         return render_template('search_results_table.html', results=results2)
     return render_template(
         'search.html',
+        # Режим активной вкладки
+        mode=mode,
+
+        # Вкладка "Поиск устройств" (оставляем как было)
         categories=categories,
         manufacturers=manufacturers,
         colors=colors,
         selected_category=selected_category,
         selected_manufacturer=selected_manufacturer,
         selected_color=selected_color,
-        results=results,
-        mode=mode,
+        results=results,  # если используешь как fallback — можно и убрать
+
+        # Вкладка "Справка по БД"
         info_by=info_by,
         info_results=info_results,
+
+        # Вкладка "Фильтрация по цене"
         filter_category_id=filter_category_id,
         price_min_filter=price_min_filter,
         price_max_filter=price_max_filter,
         filter_results=filter_results,
         min_price_in_db=min_price_in_db,
         max_price_in_db=max_price_in_db,
-        results1=results1,
-        results2=results2,
-        selected_attr1=selected_attr1,
-        selected_value1=selected_value1,
-        selected_attr2a=selected_attr2a,
-        selected_value2a=selected_value2a,
-        selected_attr2b=selected_attr2b,
-        selected_value2b=selected_value2b,
+
+        # Сообщение об ошибке для фильтра
         error_message=error_message
     )
 
@@ -853,7 +1107,7 @@ def api_attribute_values():
     if other_attr in sql_map and other_val:
         other_table, other_id_field, _ = sql_map[other_attr]
         if other_attr == 'storage_type':
-            query += "JOIN LEFT JOIN s2 ON d.device_id = s2.device_id "
+            query += "LEFT JOIN s2 ON d.device_id = s2.device_id "
             query += "AND s2.storage_type_id = ? "
         elif other_attr == 'country':
             query += "JOIN manufacturers m2 ON d.manufacturer_id = m2.manufacturer_id "
@@ -895,19 +1149,27 @@ def api_auto_search():
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         query = '''
-            SELECT d.device_id, d.model, m.name as manufacturer, c.name as category,
-                   col.name as color,
-                   s.storage_gb, st.name as storage_type, pm.name as processor_model,
-                   disp.diagonal_inches,
-                   d.current_price
+            SELECT
+                d.device_id,
+                d.model,
+                m.name  AS manufacturer,
+                c.name  AS category,
+                col.name AS color,
+                co.name AS country,
+                st.name AS storage_type,
+                pm.name AS proc_model,
+                tm.name AS techn_matr,
+                d.current_price
             FROM devices d
             JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
-            JOIN categories c ON d.category_id = c.category_id
-            JOIN color col ON d.color_id = col.color_id
-            LEFT JOIN specifications s ON d.device_id = s.device_id
-            LEFT JOIN storage_type st ON s.storage_type_id = st.storage_type_id
-            LEFT JOIN proc_model pm ON s.proc_model_id = pm.proc_model_id
-            LEFT JOIN displays disp ON d.device_id = disp.device_id
+            JOIN categories    c ON d.category_id     = c.category_id
+            JOIN color       col ON d.color_id        = col.color_id
+            LEFT JOIN specifications s  ON d.device_id    = s.device_id
+            LEFT JOIN storage_type   st ON s.storage_type_id = st.storage_type_id
+            LEFT JOIN proc_model     pm ON s.proc_model_id   = pm.proc_model_id
+            LEFT JOIN displays     disp ON d.device_id       = disp.device_id
+            LEFT JOIN techn_matr     tm ON disp.techn_matr_id = tm.techn_matr_id
+            LEFT JOIN country        co ON m.country_id       = co.country_id
             WHERE 1=1
         '''
         params = []
@@ -1048,7 +1310,7 @@ def add_retailer():
             if not (0.1 <= rating_val <= 5.0):
                 raise ValueError
         except:
-            flash("Рейтинг должен быть от 0.9 до 5.0", "danger")
+            flash("Рейтинг должен быть от 0.1 до 5.0", "danger")
             return redirect(request.url)
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
@@ -1209,7 +1471,8 @@ def edit_extras(device_id):
             aperture_main = request.form.get('aperture_main')
             optical_zoom_x = request.form.get('optical_zoom_x')
             video_resolution = request.form.get('video_resolution')
-            has_ai_enhance = 1 if request.form.get('has_ai_enhance') == 'on' else 0
+            has_ai_enhance = 1 if request.form.get('has_ai_enhance') else 0
+            data['has_ai_enhance'] = has_ai_enhance
 
             if not (megapixels_main and aperture_main and optical_zoom_x and video_resolution):
                 flash('Заполните все поля для вкладки "Камера".', 'danger')
@@ -1245,9 +1508,6 @@ def edit_extras(device_id):
                     return redirect(url_for('edit_extras', device_id=device_id))
                 data['video_resolution'] = video_resolution
 
-            if has_ai_enhance is not None:
-                data['has_ai_enhance'] = 1 if has_ai_enhance == 'on' else 0
-
             if data:
                 with sqlite3.connect(DB_PATH) as conn:
                     c = conn.cursor()
@@ -1269,7 +1529,8 @@ def edit_extras(device_id):
             data = {}
             capacity_mah = request.form.get('capacity_mah')
             fast_charging_w = request.form.get('fast_charging_w')
-            wireless_charging = 1 if request.form.get('wireless_charging') == 'on' else 0
+            wireless_charging = 1 if request.form.get('wireless_charging') else 0
+            data['wireless_charging'] = wireless_charging
             estimated_life_hours = request.form.get('estimated_life_hours')
 
             if not (capacity_mah and fast_charging_w and estimated_life_hours):
@@ -1293,9 +1554,6 @@ def edit_extras(device_id):
                 except:
                     flash('Быстрая зарядка: 0.0-20.0', 'danger')
                     return redirect(url_for('edit_extras', device_id=device_id))
-            
-            if wireless_charging is not None:
-                data['wireless_charging'] = 1 if wireless_charging == 'on' else 0
             
             if estimated_life_hours:
                 try:
@@ -1337,3 +1595,4 @@ def edit_extras(device_id):
 
 if __name__ == '__main__':
     app.run(debug=True)
+    #app.run(host="0.0.0.0", port=5000, debug=True)

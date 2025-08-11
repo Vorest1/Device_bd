@@ -1,58 +1,156 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <h2>О проекте</h2>
-  <div class="mb-4">
-    <p>
-      <strong>Device DB</strong> — информационная система для хранения, поиска и анализа современных электронных устройств.<br>
-      В базе хранятся данные о смартфонах, ноутбуках, смарт-часах и фотоаппаратах, их технических характеристиках, производителях, продавцах и другой справочной информации.<br>
-      Для возвращения на эту страницу - <strong>кликните на название проекта</strong> в левом верхнем углу.
-    </p>
-    <ul>
-      <li>Просмотр и добавление новых устройств</li>
-      <li>Гибкий поиск и фильтрация по категориям, брендам, ценам</li>
-      <li>Аналитика и отчёты по базе устройств</li>
-      <li>Доступ к просмотру всех справочников и таблиц</li>
-    </ul>
-  </div>
-  <h3>Сводная статистика</h3>
-  <div class="row">
-    <div class="col-md-6">
-      <ul class="list-group mb-3">
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          Всего устройств:
-          <span class="badge bg-primary rounded-pill">{{ stats.devices }}</span>
-        </li>
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          Категорий устройств:
-          <span class="badge bg-secondary rounded-pill">{{ stats.categories }}</span>
-        </li>
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          Производителей:
-          <span class="badge bg-secondary rounded-pill">{{ stats.manufacturers }}</span>
-        </li>
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          Продавцов:
-          <span class="badge bg-secondary rounded-pill">{{ stats.retailers }}</span>
-        </li>
-      </ul>
+  <style>
+    /* Ненавязчивая геро-секция и акцент на кнопке */
+    .hero {
+      border-radius: 1rem;
+      padding: 1.25rem 1.5rem;
+      background: linear-gradient(135deg, rgba(25,135,84,0.08), rgba(13,110,253,0.06));
+      border: 1px solid rgba(0,0,0,.075);
+    }
+    .kpi {
+      border-radius: 1rem;
+      padding: .9rem 1rem;
+      border: 1px solid rgba(0,0,0,.08);
+    }
+    .kpi h3 {
+      margin: 0;
+      font-size: 1.5rem;
+      line-height: 1.1;
+    }
+    .kpi small {
+      opacity: .8;
+    }
+    @media (min-width: 992px) {
+      .kpi h3 { font-size: 1.75rem; }
+    }
+  </style>
+
+  <div class="hero mb-4">
+    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+      <div>
+        <h2 class="mb-1">Сведения о базе данных</h2>
+        <div class="text-muted">Актуальные показатели и состояние каталога устройств</div>
+      </div>
+
+      <!-- Главная CTA-кнопка -->
+      <a href="{{ url_for('add_device') }}"
+         class="btn btn-success btn-lg px-4 py-2"
+         aria-label="Добавить новое устройство в базу">
+        ＋ Добавить устройство
+      </a>
     </div>
-    <div class="col-md-6">
-      <ul class="list-group mb-3">
-        <li class="list-group-item">Средняя цена устройства: <strong>{{ avg_price }} ₽</strong></li>
-        <li class="list-group-item">
-          Последнее обновление сайта: <strong>2025-08-08</strong>
-        </li>
-      </ul>
-      <!-- Кнопка добавления устройства -->
-      <div class="d-flex justify-content-center mt-2">
-        <a href="{{ url_for('add_device') }}" class="btn btn-success btn-lg">
-          <i class="bi bi-plus-lg"></i> Добавить устройство
-        </a>
+  </div>
+
+  <!-- Сводные KPI карточки -->
+  <div class="row g-3">
+    <div class="col-6 col-md-4 col-lg-3">
+      <div class="kpi h-100">
+        <small class="d-block text-muted">Устройства, всего</small>
+        <h3>{{ totals['devices'] }}</h3>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-3">
+      <div class="kpi h-100">
+        <small class="d-block text-muted">Категории</small>
+        <h3>{{ totals['categories'] }}</h3>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-3">
+      <div class="kpi h-100">
+        <small class="d-block text-muted">Производители</small>
+        <h3>{{ totals['manufacturers'] }}</h3>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-3">
+      <div class="kpi h-100">
+        <small class="d-block text-muted">Продавцы</small>
+        <h3>{{ totals['retailers'] }}</h3>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-3">
+      <div class="kpi h-100">
+        <small class="d-block text-muted">Устройств в наличии*</small>
+        <h3>{{ in_stock_devices }}</h3>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-3">
+      <div class="kpi h-100">
+        <small class="d-block text-muted">Предложений продавцов</small>
+        <h3>{{ offers_total }}</h3>
       </div>
     </div>
   </div>
-  <div class="alert alert-info mt-3">
-    Все функции доступны через верхнее меню. Начните с <a href="{{ url_for('all_devices') }}">просмотра всех устройств</a> или воспользуйтесь поиском.
+
+  <!-- Расширенная таблица (читаемо на одном экране) -->
+  <div class="card shadow-sm mt-4">
+    <div class="card-body">
+      <h5 class="card-title mb-3">Расширенная статистика</h5>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle mb-0 w-auto">
+          <tbody>
+            <tr>
+              <th class="text-nowrap">Диапазон цен</th>
+              <td class="text-nowrap">{{ price_min }} — {{ price_avg }} — {{ price_max }}</td>
+              <td class="text-muted">мин — средняя — макс</td>
+            </tr>
+            <tr>
+              <th class="text-nowrap">Диапазон дат релиза</th>
+              <td class="text-nowrap">{{ release_min }} — {{ release_max }}</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th class="text-nowrap">Последнее обновление цен</th>
+              <td class="text-nowrap">{{ last_update or 'нет данных' }}</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th class="text-nowrap">Размер файла БД</th>
+              <td class="text-nowrap">
+                {% if db_size_mb is not none %}~{{ db_size_mb }} МБ{% else %}—{% endif %}
+              </td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="form-text mt-2">* Устройства, имеющиеся в наличии хотя бы у одного продавца</div>
+    </div>
   </div>
+  <div class="card shadow-sm mt-4">
+    <div class="card-body">
+      <h5 class="card-title mb-3">Таблицы базы данных</h5>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle text-center">
+          <thead>
+            <tr>
+              <th>Название таблицы</th>
+              <th>Что содержит</th>
+              <th>Количество элементов</th>
+              <th>Количество атрибутов</th>
+              <th>Назначение</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in tables_info %}
+              <tr>
+                <td class="text-nowrap">{{ t.name }}</td>
+                <td class="text-start">{{ t.rus }}</td>
+                <td>{{ t.rows }}</td>
+                <td>{{ t.columns }}</td>
+                <td class="text-nowrap">{{ t.purpose }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="form-text">
+        Назначение: <strong>главная</strong> — основная сущность (устройства),
+        <strong>справочник</strong> — классификаторы и списки,
+        <strong>дополнительная</strong> — детализация и связующие таблицы.
+      </div>
+    </div>
+  </div>
+
 {% endblock %}
