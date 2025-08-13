@@ -74,16 +74,20 @@
     </div>
     <!-- Цвет -->
     <div class="col-md-4">
-      <label class="form-label">Цвет</label>
-      <div class="input-group">
-        <select class="form-select" name="color_id" required>
-          <option value="" disabled selected>Выберите...</option>
-          {% for c in colors %}
-            <option value="{{ c[0] }}">{{ c[1] }}</option>
-          {% endfor %}
-        </select>
-      </div>
+    <label class="form-label">Цвет</label>
+    <div class="input-group">
+      <select class="form-select" name="color_id" required>
+        <option value="" disabled selected>Выберите...</option>
+        {% for c in colors %}
+          <option value="{{ c[0] }}">{{ c[1] }}</option>
+        {% endfor %}
+      </select>
+      <!-- НОВОЕ: плюс для добавления цвета -->
+      <a href="{{ url_for('add_row', table_name='color', next=request.path) }}"
+        class="btn btn-outline-secondary"
+        title="Добавить цвет">+</a>
     </div>
+  </div>
     <!-- Гарантия -->
     <div class="col-md-4">
       <label class="form-label">Гарантия (мес)</label>

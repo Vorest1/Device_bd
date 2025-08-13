@@ -1,57 +1,57 @@
 {% extends "base.html" %}
+  <style>
+  .table-actions { white-space: nowrap; }
+  .table-responsive { overflow-x: auto; } /* если обёрнуто в .table-responsive */
+  </style>
 {% block content %}
-  <h2>Таблица: {{ table }}</h2>
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0">Таблица: {{ table }}</h2>
+    <a class="btn btn-success"
+       href="{{ url_for('add_row', table_name=table, next=request.full_path) }}">
+      + Добавить запись
+    </a>
+  </div>
 
-  <!--{% set one_to_one = ['specifications', 'displays', 'cameras', 'batteries'] %} -->
-  {% set auxiliary = ['techn_matr', 'proc_model', 'storage_type', 'country', 'color', 'os_name', 'specifications', 'displays', 'cameras', 'batteries'] %}
-
-  {% if table not in auxiliary and table not in one_to_one %}
-    {% if table == 'manufacturers' %}
-      <a href="{{ url_for('add_manufacturer', next=request.full_path) }}" class="btn btn-primary mb-2">Добавить производителя</a>
-    {% elif table == 'categories' %}
-      <a href="{{ url_for('add_category', next=request.full_path) }}" class="btn btn-primary mb-2">Добавить категорию</a>
-    {% elif table == 'retailers' %}
-      <a href="{{ url_for('add_retailer', next=request.full_path) }}" class="btn btn-primary mb-2">Добавить продавца</a>
-    {% elif table == 'os_name' %}
-      <a href="{{ url_for('add_os', next=request.full_path) }}" class="btn btn-primary mb-2">Добавить ОС</a>
-    {% endif %}
-
+  {% if is_dictionary %}
+    <div class="alert alert-secondary py-2">
+      Элемент справочника нельзя удалить, если он используется хотя бы в одной записи.
+    </div>
   {% endif %}
 
-  <table class="table table-bordered table-sm">
-    <thead>
-      <tr>
-        {% for col in columns %}
-          <th>{{ col }}</th>
-        {% endfor %}
-        {% if table not in auxiliary %}
-          <th>Действия</th>
-        {% endif %}
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in rows %}
+  <div class="table-responsive">
+    <table class="table table-bordered table-sm align-middle">
+      <thead>
         <tr>
-          {% for cell in row %}
-            <td>{{ cell }}</td>
-          {% endfor %}
-          {% if table not in auxiliary %}
-            <td>
-              {% if table == 'devices' %}
-                <form method="post" action="{{ url_for('delete_device', device_id=row[0]) }}" style="display:inline;">
-                  <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Удалить устройство и связанные с ним данные?');">Удалить</button>
-                </form>
-              {% elif table not in one_to_one %}
-                <form method="post" action="{{ url_for('delete_row', table_name=table, pk=row[0]) }}" style="display:inline;">
-                  <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Удалить запись?');">Удалить</button>
-                </form>
-              {% endif %}
-            </td>
-          {% endif %}
+          {% for col in columns %}<th>{{ col }}</th>{% endfor %}
+          <th class="text-center">Действия</th>
         </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  
-  <a href="{{ url_for('tables_list') }}" class="btn btn-secondary mt-3">Назад к списку таблиц</a>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            {% for cell in row %}
+              <td class="text-nowrap">{{ cell }}</td>
+            {% endfor %}
+            <td class="text-center table-actions">
+              {% set pk_val = row[0] %}
+              <form method="post"
+                    action="{% if table == 'devices' %}{{ url_for('delete_device', device_id=pk_val) }}{% else %}{{ url_for('delete_row', table_name=table, pk=pk_val) }}{% endif %}"
+                    class="d-inline-block"
+                    onsubmit="return confirmDelete('{{ table }}','{{ pk_val }}')">
+                <button type="submit" class="btn btn-sm btn-outline-danger">Удалить</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // мини-скрипт подтверждения — остаётся в этом .html
+    function confirmDelete(table, id) {
+      return confirm(`Удалить запись из «${table}» (ID=${id})?`);
+    }
+  </script>
+
 {% endblock %}

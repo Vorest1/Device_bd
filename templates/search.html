@@ -1,656 +1,155 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Поиск и справка</h2>
-  <!-- Вкладки  и существующие панели оставляем без изменений -->
-  <ul class="nav nav-tabs mb-3" id="searchTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link {% if mode == 'search' %}active{% endif %}" id="search-tab" data-bs-toggle="tab" data-bs-target="#search-pane" type="button" role="tab">Поиск устройств</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link {% if mode == 'filter' %}active{% endif %}" id="filter-tab" data-bs-toggle="tab" data-bs-target="#filter-pane" type="button" role="tab">Фильтрация по цене</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link {% if mode == 'search1' %}active{% endif %}" id="search1-tab" data-bs-toggle="tab" data-bs-target="#search1-pane" type="button" role="tab">Поиск по 1 атрибуту</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link {% if mode == 'search2' %}active{% endif %}" id="search2-tab" data-bs-toggle="tab" data-bs-target="#search2-pane" type="button" role="tab">Поиск по 2 атрибутам</button>
-    </li>
-  </ul>
+<h2>Поиск</h2>
 
-  <div class="tab-content">
-    <!-- Поиск устройств -->
-    <div class="tab-pane fade {% if mode == 'search' %}show active{% endif %}" id="search-pane" role="tabpanel">
-      <form id="auto-search-form" class="row g-3">
-        <div class="col-md-4">
-          <label class="form-label">Категория</label>
-          <select class="form-select" name="category_id" id="category">
-            <option value="all">Все</option>
-            {% for cat in categories %}
-              <option value="{{ cat[0] }}">{{ cat[1] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Производитель</label>
-          <select class="form-select" name="manufacturer_id" id="manufacturer" disabled>
-            <option value="all">Все</option>
-            {% for man in manufacturers %}
-              <option value="{{ man[0] }}">{{ man[1] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Цвет</label>
-          <select class="form-select" name="color_id" id="color" disabled>
-            <option value="all">Все</option>
-            {% for color in colors %}
-              <option value="{{ color[0] }}">{{ color[1] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </form>
-      <hr>
-      <div id="search-results">
-        <!-- Автоматически заполняется через JS/AJAX -->
-      </div>
-    </div>
-<!-- 
-    Справка по БД
-    <div class="tab-pane fade {% if mode == 'info' %}show active{% endif %}" id="info-pane" role="tabpanel">
-      <form method="POST" class="row g-3 mb-3">
-        <input type="hidden" name="mode" value="info">
-        <div class="col-md-4">
-          <label class="form-label">Группировать по:</label>
-          <select class="form-select" name="info_by">
-            <option value="retailer" {% if info_by == 'retailer' %}selected{% endif %}>Продавцу</option>
-            <option value="country" {% if info_by == 'country' %}selected{% endif %}>Стране</option>
-          </select>
-        </div>
-        <div class="col-md-12 d-flex justify-content-end">
-          <button type="submit" class="btn btn-info">Получить справку</button>
-        </div>
-      </form>
-      {% if info_results and mode == 'info' %}
-        <h5>Количество устройств по {% if info_by == 'retailer' %}продавцам{% else %}странам{% endif %}:</h5>
-        <table class="table table-bordered w-auto">
-          <thead>
-            <tr>
-              <th>{% if info_by == 'retailer' %}Продавец{% else %}Страна{% endif %}</th>
-              <th>Количество устройств</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in info_results %}
-              <tr>
-                <td>{{ row[0] }}</td>
-                <td>{{ row[1] }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% elif mode == 'info' %}
-        <div class="alert alert-info">Здесь будет отображаться справка после выбора и нажатия "Получить справку".</div>
-      {% endif %}
-    </div> -->
+<ul class="nav nav-tabs mb-3" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link {% if mode == 'by1' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#by1" type="button" role="tab">
+      1 атрибут: Производитель
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link {% if mode == 'by2' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#by2" type="button" role="tab">
+      2 атрибута: Страна + Цвет
+    </button>
+  </li>
+</ul>
 
-    <!-- Фильтрация по цене -->
-    <div class="tab-pane fade {% if mode == 'filter' %}show active{% endif %}" id="filter-pane" role="tabpanel">
-      <form method="POST" class="row g-3 mb-3" id="price-filter-form">
-        <input type="hidden" name="mode" value="filter">
-        <div class="col-md-4">
-          <label class="form-label">Категория</label>
-          <select class="form-select" name="filter_category_id">
-            <option value="all" {% if filter_category_id == "all" %}selected{% endif %}>Все</option>
-            {% for cat in categories %}
-              <option value="{{ cat[0] }}" {% if filter_category_id == cat[0]|string %}selected{% endif %}>{{ cat[1] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Цена от (₽)</label>
-          <input type="number" class="form-control"
-                name="price_min"
-                id="price_min"
-                value="{{ price_min_filter or '' }}"
-                min="{{ min_price_in_db }}"
-                max="{{ max_price_in_db }}"
-                placeholder="{{ min_price_in_db }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Цена до (₽)</label>
-          <input type="number" class="form-control"
-                name="price_max"
-                id="price_max"
-                value="{{ price_max_filter or '' }}"
-                min="{{ min_price_in_db }}"
-                max="{{ max_price_in_db }}"
-                placeholder="{{ max_price_in_db }}">
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-          <button type="submit" class="btn btn-success w-100">Фильтровать</button>
-        </div>
-      </form>
-      {% if error_message %}
-        <div class="alert alert-danger">{{ error_message }}</div>
-      {% endif %}
-      {% if filter_results and mode == 'filter' %}
-        {% set results = filter_results %}
-        <h5>Результаты фильтрации:</h5>
-        {% include 'search_results_table.html' %}
-      {% elif mode == 'filter' %}
-        <div class="alert alert-info">Здесь появятся результаты после выбора и фильтрации.</div>
-      {% endif %}
-    </div>
+<div class="tab-content">
+  <!-- Вкладка 1: Производитель (ручной submit) -->
+  <div class="tab-pane fade {% if mode == 'by1' %}show active{% endif %}" id="by1" role="tabpanel">
+    <form method="POST" class="row g-3 mb-3">
+      <input type="hidden" name="mode" value="by1">
+      <div class="col-md-6">
+        <label class="form-label">Производитель</label>
+        <select class="form-select" name="manufacturer_id" required>
+          <option value="" disabled {% if not selected_manufacturer %}selected{% endif %}>Выберите...</option>
+          {% for m in manufacturers %}
+            <option value="{{ m[0] }}" {% if selected_manufacturer == m[0]|string %}selected{% endif %}>{{ m[1] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6 d-flex align-items-end">
+        <button type="submit" class="btn btn-success">Найти</button>
+      </div>
+    </form>
 
-    <!-- Поиск по 1 атрибуту (режим Ctrl+F) -->
-    <div class="tab-pane fade {% if mode == 'search1' %}show active{% endif %}" id="search1-pane" role="tabpanel">
-      <div class="row">
-        <div class="col-12">
-          <div id="s1-table" class="mb-3"></div>
-        </div>
-      </div>
-      <!-- Закреплённая справа панель управления -->
-      <div class="ctrl-panel ctrl-fixed">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            <h6 class="card-title mb-3">Поиск по 1 атрибуту</h6>
-            <div class="vstack gap-2">
-              <div>
-                <label class="form-label">Атрибут</label>
-                <select id="s1-attr" class="form-select">
-                  <option value="" selected disabled>Выберите атрибут</option>
-                  <option value="category">Категория</option>
-                  <option value="manufacturer">Производитель</option>
-                  <option value="color">Цвет</option>
-                  <option value="storage_type">Тип накопителя</option>
-                  <option value="country">Страна</option>
-                  <option value="processor_model">Модель процессора</option>
-                  <option value="tech_matr">Технология матрицы</option>
-                </select>
-              </div>
-              <div>
-                <label class="form-label">Значение</label>
-                <select id="s1-value" class="form-select" disabled></select>
-              </div>
-              <div class="d-grid gap-2 mt-2">
-                <button id="s1-prev" type="button" class="btn btn-outline-secondary" disabled>◀ Предыдущее</button>
-                <button id="s1-next" type="button" class="btn btn-primary" disabled>Следующее ▶</button>
-                <button id="s1-clear" type="button" class="btn btn-link">Сброс</button>
-                <div class="text-center small text-muted">Совпадения: <span id="s1-counter">0/0</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Поиск по 2 атрибутам (режим Ctrl+F) -->
-    <div class="tab-pane fade {% if mode == 'search2' %}show active{% endif %}" id="search2-pane" role="tabpanel">
-      <div class="row">
-        <div class="col-12">
-          <div id="s2-table" class="mb-3"></div>
-        </div>
-      </div>
-      <!-- Закреплённая справа панель управления -->
-      <div class="ctrl-panel ctrl-fixed">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            <h6 class="card-title mb-3">Поиск по 2 атрибутам</h6>
-            <div class="vstack gap-2">
-              <div>
-                <label class="form-label">Атрибут 1</label>
-                <select id="s2-attr-a" class="form-select">
-                  <option value="" selected disabled>Выберите атрибут</option>
-                  <option value="category">Категория</option>
-                  <option value="manufacturer">Производитель</option>
-                  <option value="color">Цвет</option>
-                  <option value="storage_type">Тип накопителя</option>
-                  <option value="country">Страна</option>
-                  <option value="processor_model">Модель процессора</option>
-                  <option value="tech_matr">Технология матрицы</option>
-                </select>
-              </div>
-              <div>
-                <label class="form-label">Значение 1</label>
-                <select id="s2-value-a" class="form-select" disabled></select>
-              </div>
-              <div class="mt-2">
-                <label class="form-label">Атрибут 2</label>
-                <select id="s2-attr-b" class="form-select" disabled>
-                  <option value="" selected disabled>Выберите атрибут</option>
-                  <option value="category">Категория</option>
-                  <option value="manufacturer">Производитель</option>
-                  <option value="color">Цвет</option>
-                  <option value="storage_type">Тип накопителя</option>
-                  <option value="country">Страна</option>
-                  <option value="processor_model">Модель процессора</option>
-                  <option value="tech_matr">Технология матрицы</option>
-                </select>
-              </div>
-              <div>
-                <label class="form-label">Значение 2</label>
-                <select id="s2-value-b" class="form-select" disabled></select>
-              </div>
-              <div class="d-grid gap-2 mt-2">
-                <button id="s2-prev" type="button" class="btn btn-outline-secondary" disabled>◀ Предыдущее</button>
-                <button id="s2-next" type="button" class="btn btn-primary" disabled>Следующее ▶</button>
-                <button id="s2-clear" type="button" class="btn btn-link">Сброс</button>
-                <div class="text-center small text-muted">Совпадения: <span id="s2-counter">0/0</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
+    {% if results and mode == 'by1' %}
+      {% include 'search_results_table.html' %}
+    {% elif mode == 'by1' and selected_manufacturer %}
+      <div class="alert alert-warning">Совпадений не найдено.</div>
+    {% endif %}
   </div>
 
-  <!-- Оставляем существующий JS для вкладки "Поиск устройств" -->
-  <script src="{{ url_for('static', filename='search.js') }}"></script>
+  <!-- Вкладка 2: Страна + Цвет (автоматический submit при выборе цвета) -->
+  <div class="tab-pane fade {% if mode == 'by2' %}show active{% endif %}" id="by2" role="tabpanel">
+    <form method="POST" class="row g-3 mb-3" id="by2-form">
+      <input type="hidden" name="mode" value="by2">
 
-  <!-- Валидация формы фильтра по цене -->
-  <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    const filterForm = document.getElementById('price-filter-form');
-    if (filterForm) {
-      filterForm.addEventListener('submit', function(e) {
-        const minInput = document.getElementById('price_min');
-        const maxInput = document.getElementById('price_max');
-        const minVal = minInput.value ? parseFloat(minInput.value) : null;
-        const maxVal = maxInput.value ? parseFloat(maxInput.value) : null;
-        if (minVal !== null && maxVal !== null && minVal > maxVal) {
-          e.preventDefault();
-          let alert = document.getElementById('price-alert');
-          if (!alert) {
-            alert = document.createElement('div');
-            alert.id = 'price-alert';
-            alert.className = 'alert alert-danger mt-2';
-            filterForm.parentNode.insertBefore(alert, filterForm.nextSibling);
-          }
-          alert.textContent = 'Минимальная цена не может быть больше максимальной!';
-          minInput.focus();
-        } else {
-          const alert = document.getElementById('price-alert');
-          if (alert) alert.remove();
-        }
-      });
-    }
-  });
-  </script>
+      <div class="col-md-5">
+        <label class="form-label">Страна</label>
+        <select class="form-select" name="country_id" id="country_id" required>
+          <option value="" disabled {% if not selected_country %}selected{% endif %}>Выберите...</option>
+          {% for co in countries %}
+            <option value="{{ co[0] }}" {% if selected_country == co[0]|string %}selected{% endif %}>{{ co[1] }}</option>
+          {% endfor %}
+        </select>
+      </div>
 
-  <!-- Автообновление диапазона цен по выбранной категории -->
-  <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    const categorySelect = document.querySelector('select[name="filter_category_id"]');
-    const minInput = document.getElementById('price_min');
-    const maxInput = document.getElementById('price_max');
+      <div class="col-md-5">
+        <label class="form-label">Цвет</label>
+        <select class="form-select" name="color_id" id="color_id" required disabled>
+          <option value="" disabled selected>Сначала выберите страну</option>
+        </select>
+      </div>
+<!-- 
+      <div class="col-md-2 d-flex align-items-end">
+        // Кнопка оставлена на случай, если потребуется вручную — но она не обязательна
+        <button type="submit" class="btn btn-success w-100" id="by2-submit" disabled>Найти</button>
+      </div> -->
+    </form>
 
-    async function updatePriceRange() {
-      const categoryId = categorySelect.value;
-      const resp = await fetch(`/api/category_price_range?category_id=${categoryId}`);
-      const data = await resp.json();
-      minInput.min = data.min;
-      minInput.max = data.max;
-      minInput.placeholder = data.min;
-      if (minInput.value && (Number(minInput.value) < data.min || Number(minInput.value) > data.max)) minInput.value = "";
-      maxInput.min = data.min;
-      maxInput.max = data.max;
-      maxInput.placeholder = data.max;
-      if (maxInput.value && (Number(maxInput.value) < data.min || Number(maxInput.value) > data.max)) maxInput.value = "";
-      if (minInput.value && maxInput.value && Number(minInput.value) > Number(maxInput.value)) {
-        minInput.value = "";
-        maxInput.value = "";
-      }
+    {% if results and mode == 'by2' %}
+      {% include 'search_results_table.html' %}
+    {% elif mode == 'by2' and selected_country and selected_color %}
+      <div class="alert alert-warning">Совпадений не найдено.</div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const countrySel = document.getElementById('country_id');
+  const colorSel   = document.getElementById('color_id');
+  const submitBtn  = document.getElementById('by2-submit');
+  const by2Form    = document.getElementById('by2-form');
+
+  async function loadColors(countryId, preset) {
+    colorSel.innerHTML = '';
+    colorSel.disabled = true;
+    submitBtn && (submitBtn.disabled = true);
+
+    if (!countryId) {
+      colorSel.innerHTML = '<option value="" disabled selected>Сначала выберите страну</option>';
+      return;
     }
 
-    if (categorySelect && minInput && maxInput) {
-      categorySelect.addEventListener('change', updatePriceRange);
-      updatePriceRange();
-    }
-  });
-  </script>
+    try {
+      const url = `/api/attribute_values?attr=color&other_attr=country&other_val=${encodeURIComponent(countryId)}`;
+      const resp = await fetch(url);
+      const data = await resp.json(); // [{id,name}, ...]
 
-  <!-- Шаблоны скрытых select-ов (оставлены, если используются в других вкладках) -->
-  <select id="category-template" style="display:none">
-    {% for cat in categories %}
-      <option value="{{ cat[0] }}">{{ cat[1] }}</option>
-    {% endfor %}
-  </select>
-  <select id="manufacturer-template" style="display:none">
-    {% for man in manufacturers %}
-      <option value="{{ man[0] }}">{{ man[1] }}</option>
-    {% endfor %}
-  </select>
-  <select id="color-template" style="display:none">
-    {% for color in colors %}
-      <option value="{{ color[0] }}">{{ color[1] }}</option>
-    {% endfor %}
-  </select>
-
-  <!-- Клиентский "Ctrl+F"-поиск + умные списки значений -->
-  <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    // Универсальная загрузка таблицы во вкладку
-    async function ensureTable(targetId) {
-      const box = document.getElementById(targetId);
-      if (!box) return;
-      if (box.dataset.loaded === '1') return;
-      box.innerHTML = '<div class="text-center my-3">Загружаю список устройств…</div>';
-      const resp = await fetch('/api/auto_search?_=' + Date.now());
-      const html = await resp.text();
-      box.innerHTML = html;
-      box.dataset.loaded = '1';
-    }
-
-    // Построение индекса по заголовкам
-    function buildIndex(containerId) {
-      const wrap = document.getElementById(containerId);
-      const table = wrap ? wrap.querySelector('table') : null;
-      if (!table) return { rows: [], headerMap: {} };
-      const thead = table.querySelector('thead');
-      const headerMap = {};
-      if (thead) {
-        [...thead.querySelectorAll('th')].forEach((th, i) => {
-          const t = th.textContent.trim().toLowerCase();
-          headerMap[t] = i;
-        });
-      }
-      const bodyRows = [...table.querySelectorAll('tbody tr')];
-      const rows = bodyRows.map(tr => {
-      const cells = [...tr.querySelectorAll('td')].map(td => td.textContent.trim());
-      return {
-        el: tr,
-        data: {
-          manufacturer:     cells[headerMap['производитель']] || '',
-          category:         cells[headerMap['категория']] || '',
-          color:            cells[headerMap['цвет']] || '',
-          country:          cells[headerMap['страна']] || '',
-          storage_type:     cells[headerMap['тип накопителя']] || '',
-          processor_model:  cells[headerMap['модель процессора']] || '',
-          tech_matr:        cells[headerMap['матрица']] || ''
-        }
-      };
-    });
-      return { rows, headerMap };
-    }
-
-    // Получить набор уникальных значений (с опциональным фильтром строк)
-    function uniqueValues(rows, key, predicate) {
-      const set = new Set();
-      rows.forEach(r => {
-        if (!predicate || predicate(r)) {
-          const v = (r.data[key] || '').trim();
-          if (v) set.add(v);
-        }
-      });
-      return Array.from(set).sort((a,b)=>a.localeCompare(b,'ru'));
-    }
-
-    // Навигация по совпадениям
-    function goToMatch(state, idx) {
-      if (!state.matches.length) return;
-      state.current = ((idx % state.matches.length) + state.matches.length) % state.matches.length;
-      state.rows.forEach(r => r.el.classList.remove('table-primary'));
-      const tr = state.matches[state.current].el;
-      tr.classList.add('table-primary');
-      tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      state.counter.textContent = `${state.current + 1}/${state.matches.length}`;
-      state.prevBtn.disabled = state.nextBtn.disabled = false;
-    }
-
-    function clearHighlight(state) {
-      state.rows.forEach(r => r.el.classList.remove('table-warning', 'table-primary'));
-      state.matches = [];
-      state.current = -1;
-      state.counter.textContent = '0/0';
-      state.prevBtn.disabled = state.nextBtn.disabled = true;
-    }
-
-    function recalcMatches(state, predicate) {
-      state.rows.forEach(r => r.el.classList.remove('table-warning', 'table-primary'));
-      state.matches = state.rows.filter(predicate);
-      state.matches.forEach(r => r.el.classList.add('table-warning'));
-      state.counter.textContent = `${state.matches.length ? 1 : 0}/${state.matches.length}`;
-      state.prevBtn.disabled = state.nextBtn.disabled = state.matches.length === 0;
-      if (state.matches.length) goToMatch(state, 0);
-    }
-
-    // ---- Search1 state
-    const s1 = {
-      boxId: 's1-table',
-      attr: document.getElementById('s1-attr'),
-      value: document.getElementById('s1-value'),
-      prevBtn: document.getElementById('s1-prev'),
-      nextBtn: document.getElementById('s1-next'),
-      clearBtn: document.getElementById('s1-clear'),
-      counter: document.getElementById('s1-counter'),
-      rows: [],
-      matches: [],
-      current: -1
-    };
-
-    // ---- Search2 state
-    const s2 = {
-      boxId: 's2-table',
-      attrA: document.getElementById('s2-attr-a'),
-      valA:  document.getElementById('s2-value-a'),
-      attrB: document.getElementById('s2-attr-b'),
-      valB:  document.getElementById('s2-value-b'),
-      prevBtn: document.getElementById('s2-prev'),
-      nextBtn: document.getElementById('s2-next'),
-      clearBtn: document.getElementById('s2-clear'),
-      counter: document.getElementById('s2-counter'),
-      rows: [],
-      matches: [],
-      current: -1
-    };
-
-    // Получить набор уникальных значений (с опциональным фильтром строк)
-    function uniqueValues(rows, key, predicate) {
-      const set = new Set();
-      rows.forEach(r => {
-        if (!predicate || predicate(r)) {
-          const v = (r.data[key] || '').trim();
-          if (v) set.add(v);
-        }
-      });
-      return Array.from(set).sort((a,b)=>a.localeCompare(b,'ru'));
-    }
-
-    // ЗАМЕНИ ЭТУ ФУНКЦИЮ:
-    function fillValuesFromRows(rows, attrKey, selectEl, filterPredicate, keepCurrent=true, withPlaceholder=false) {
-      const prev = selectEl.value;
-      selectEl.innerHTML = '';
-      selectEl.disabled = !attrKey;
-      if (!attrKey) return;
-
-      // 1) вставляем '---' при необходимости
-      if (withPlaceholder) {
-        const ph = document.createElement('option');
-        ph.value = '';
-        ph.textContent = '---';
-        ph.selected = true; // по умолчанию выделяем '---'
-        selectEl.appendChild(ph);
+      if (!data.length) {
+        colorSel.innerHTML = '<option value="" disabled selected>Нет доступных цветов</option>';
+        return;
       }
 
-      // 2) реальные значения
-      const values = uniqueValues(rows, attrKey, filterPredicate);
-      values.forEach(v => {
+      // placeholder
+      const ph = document.createElement('option');
+      ph.value = '';
+      ph.textContent = 'Выберите...';
+      ph.disabled = true;
+      ph.selected = !preset;
+      colorSel.appendChild(ph);
+
+      data.forEach(item => {
         const o = document.createElement('option');
-        o.value = v;
-        o.textContent = v;
-        selectEl.appendChild(o);
+        o.value = String(item.id);
+        o.textContent = item.name;
+        if (preset && String(preset) === String(item.id)) o.selected = true;
+        colorSel.appendChild(o);
       });
 
-      // если надо — вернуть предыдущий выбор (и он не пустой)
-      if (keepCurrent && prev && prev !== '' && values.includes(prev)) {
-        selectEl.value = prev;
+      colorSel.disabled = false;
+      submitBtn && (submitBtn.disabled = !colorSel.value);
+    } catch (e) {
+      colorSel.innerHTML = '<option value="" disabled selected>Ошибка загрузки</option>';
+    }
+  }
+
+  // Подгрузка цветов при выборе страны
+  if (countrySel) {
+    countrySel.addEventListener('change', () => loadColors(countrySel.value, null));
+  }
+
+  // АВТОСАБМИТ: как только пользователь выбрал цвет — сразу запрос к серверу
+  if (colorSel && by2Form) {
+    colorSel.addEventListener('change', () => {
+      const hasValue = !!colorSel.value;
+      submitBtn && (submitBtn.disabled = !hasValue);
+      if (hasValue) {
+        // Корректная отправка формы (подхватывает валидацию HTML)
+        if (by2Form.requestSubmit) by2Form.requestSubmit();
+        else by2Form.submit();
       }
-
-      // разрешаем выбор, если есть хотя бы placeholder или значения
-      selectEl.disabled = selectEl.options.length === 0;
-    }
-
-    // Запрет одинаковых атрибутов
-    function lockDistinctAttrs(aSel, bSel) {
-      const a = aSel.value;
-      [...bSel.options].forEach(o => { o.disabled = !!a && o.value === a; });
-      const b = bSel.value;
-      [...aSel.options].forEach(o => { o.disabled = !!b && o.value === b; });
-      bSel.disabled = !aSel.value;
-    }
-
-    async function initS1() {
-      await ensureTable(s1.boxId);
-      const { rows } = buildIndex(s1.boxId);
-      s1.rows = rows;
-      clearHighlight(s1);
-    }
-
-    async function initS2() {
-      await ensureTable(s2.boxId);
-      const { rows } = buildIndex(s2.boxId);
-      s2.rows = rows;
-      clearHighlight(s2);
-    }
-
-    // Обработчики S1
-    if (s1.attr) {
-      s1.attr.addEventListener('change', () => {
-        const key = s1.attr.value;
-        // было: fillValuesFromRows(s1.rows, key, s1.value, null, false);
-        fillValuesFromRows(s1.rows, key, s1.value, null, false, true); // ← добавили placeholder '---'
-        clearHighlight(s1);
-      });
-    }
-    if (s1.value) s1.value.addEventListener('change', () => applyS1());
-
-    function applyS1() {
-      if (!s1.attr.value || !s1.value.value) { clearHighlight(s1); return; }
-      const wantedText = s1.value.value.trim().toLowerCase();
-      const attrKey = s1.attr.value;
-      recalcMatches(s1, r => (r.data[attrKey] || '').toLowerCase() === wantedText);
-    }
-    if (s1.prevBtn) s1.prevBtn.addEventListener('click', () => goToMatch(s1, s1.current - 1));
-    if (s1.nextBtn) s1.nextBtn.addEventListener('click', () => goToMatch(s1, s1.current + 1));
-    if (s1.clearBtn) s1.clearBtn.addEventListener('click', () => {
-      s1.attr.value = '';
-      s1.value.innerHTML = '';
-      s1.value.disabled = true;
-      clearHighlight(s1);
     });
+  }
 
-    // Обработчики S2
-    if (s2.attrA && s2.attrB) {
-      s2.attrA.addEventListener('change', () => {
-        lockDistinctAttrs(s2.attrA, s2.attrB);
-        const otherChosen = (s2.attrB.value && s2.valB.value);
-        const pred = otherChosen ? (r => (r.data[s2.attrB.value]||'') === s2.valB.value) : null;
-        fillValuesFromRows(s2.rows, s2.attrA.value, s2.valA, pred, true);
-        applyS2();
-      });
-      s2.attrB.addEventListener('change', () => {
-        lockDistinctAttrs(s2.attrA, s2.attrB);
-        const otherChosen = (s2.attrA.value && s2.valA.value);
-        const pred = otherChosen ? (r => (r.data[s2.attrA.value]||'') === s2.valA.value) : null;
-        fillValuesFromRows(s2.rows, s2.attrB.value, s2.valB, pred, true);
-        // Сужаем доступные значения A по выбранному B
-        const predBack = (s2.attrB.value && s2.valB.value) ? (r => (r.data[s2.attrB.value]||'') === s2.valB.value) : null;
-        fillValuesFromRows(s2.rows, s2.attrA.value, s2.valA, predBack, true);
-        applyS2();
-      });
-    }
-    if (s2.valA) s2.valA.addEventListener('change', () => {
-      const pred = (s2.attrA.value && s2.valA.value) ? (r => (r.data[s2.attrA.value]||'') === s2.valA.value) : null;
-      fillValuesFromRows(s2.rows, s2.attrB.value, s2.valB, pred, true);
-      applyS2();
-    });
-    if (s2.valB) s2.valB.addEventListener('change', () => {
-      const pred = (s2.attrB.value && s2.valB.value) ? (r => (r.data[s2.attrB.value]||'') === s2.valB.value) : null;
-      fillValuesFromRows(s2.rows, s2.attrA.value, s2.valA, pred, true);
-      applyS2();
-    });
-
-    function applyS2() {
-      const aKey = s2.attrA.value, bKey = s2.attrB.value;
-      const aOk = !!aKey && !!s2.valA.value;
-      const bOk = !!bKey && !!s2.valB.value;
-      if (!aOk && !bOk) { clearHighlight(s2); return; }
-      const aText = aOk ? s2.valA.value.trim().toLowerCase() : null;
-      const bText = bOk ? s2.valB.value.trim().toLowerCase() : null;
-      recalcMatches(s2, r => {
-        const condA = !aOk || (r.data[aKey] || '').toLowerCase() === aText;
-        const condB = !bOk || (r.data[bKey] || '').toLowerCase() === bText;
-        return condA && condB;
-      });
-    }
-    if (s2.prevBtn) s2.prevBtn.addEventListener('click', () => goToMatch(s2, s2.current - 1));
-    if (s2.nextBtn) s2.nextBtn.addEventListener('click', () => goToMatch(s2, s2.current + 1));
-    if (s2.clearBtn) s2.clearBtn.addEventListener('click', () => {
-      ['attrA','valA','attrB','valB'].forEach(k => {
-        if (k.startsWith('val')) {
-          s2[k].innerHTML = '';
-          s2[k].disabled = true;
-        } else {
-          s2[k].value = '';
-        }
-      });
-      lockDistinctAttrs(s2.attrA, s2.attrB);
-      clearHighlight(s2);
-    });
-
-    // Подгрузка данных при переключении вкладок
-    const tabElList = document.querySelectorAll('button[data-bs-toggle="tab"]');
-    tabElList.forEach(el => {
-      el.addEventListener('shown.bs.tab', async (e) => {
-        const target = e.target.getAttribute('data-bs-target');
-        if (target === '#search1-pane') await initS1();
-        if (target === '#search2-pane') await initS2();
-      });
-    });
-    // Если одна из вкладок уже активна при загрузке
-    const activePane = document.querySelector('.tab-pane.show.active');
-    if (activePane && activePane.id === 'search1-pane') initS1();
-    if (activePane && activePane.id === 'search2-pane') initS2();
-  });
-  </script>
-
-<style>
-/* --- компактная правая панель для search1 / search2 --- */
-:root{
-  --search-panel-w: clamp(220px, 18vw, 300px); /* было шире; сделай меньше при желании */
-  --search-panel-gap: 12px;                    /* отступ от правого края */
-}
-
-/* даём контенту справа место ровно как ширина панели */
-#search1-pane, #search2-pane{
-  position: relative;
-  padding-right: calc(var(--search-panel-w) + var(--search-panel-gap) + 8px);
-}
-
-/* фиксируем панель и делаем её уже */
-.ctrl-fixed{
-  position: fixed;
-  right: var(--search-panel-gap);
-  top: 90px;
-  width: var(--search-panel-w);
-  z-index: 1030;
-}
-
-/* немного ужимаем внутренности для компактности */
-.ctrl-panel .card-body{ padding: 12px 12px; }
-.ctrl-panel .vstack{ gap: 8px !important; }
-.ctrl-panel .btn{ border-radius: .65rem; padding: .4rem .6rem; }
-
-/* таблица не залезает под панель при узких окнах */
-@media (max-width: 1200px){
-  :root{ --search-panel-w: clamp(200px, 20vw, 260px); }
-}
-@media (max-width: 992px){
-  #search1-pane, #search2-pane{ padding-right: 0; }
-  .ctrl-fixed{ position: static; width: auto; }
-}
-</style>
-
+  // Восстановление состояния после POST: если выбрана страна — подгрузить цвета
+  {% if mode == 'by2' and selected_country %}
+    loadColors('{{ selected_country }}', '{{ selected_color or "" }}');
+  {% endif %}
+});
+</script>
 
 {% endblock %}

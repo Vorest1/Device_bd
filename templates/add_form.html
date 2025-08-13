@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-3">Добавить запись в «{{ table }}»</h2>
+
+<form method="POST" class="row g-3">
+  {% for col in columns %}
+    <div class="col-md-6">
+      <label class="form-label">{{ col }}</label>
+      <input type="text" class="form-control" name="{{ col }}" required>
+    </div>
+  {% endfor %}
+
+  <input type="hidden" name="next_url" value="{{ next_url }}">
+
+  <input type="hidden" name="embedded"
+       value="{{ 1 if (request.args.get('embedded') or request.form.get('embedded')) else '' }}">
+
+  <div class="col-12 d-flex gap-2 justify-content-end mt-2">
+    <a id="back-btn" 
+        class="btn btn-outline-secondary" 
+        href="{{ next_url or '#' }}">Назад</a>
+        <script>
+        document.addEventListener('DOMContentLoaded', () => {
+        const back = document.getElementById('back-btn');
+        back?.addEventListener('click', (e) => {
+            e.preventDefault();
+            const href = back.getAttribute('href') || '';
+            if (href) {
+            const url = href.includes('embedded=') ? href
+                        : href + (href.includes('?') ? '&' : '?') + 'embedded=1';
+            location.replace(url); // ← без добавления в историю
+            } else {
+            location.replace('{{ url_for("index") }}');
+            }
+        });
+        });
+        </script>
+    <button type="submit" class="btn btn-success">Добавить</button>
+  </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const back = document.getElementById('back-btn');
+  back.addEventListener('click', (e) => {
+    e.preventDefault();
+
+    // 1) Если мы пришли сюда со страницы внутри сайта — чисто назад в истории
+    const hasRef = !!document.referrer && new URL(document.referrer).origin === location.origin;
+    if (hasRef && history.length > 1) {
+      history.back();
+      return;
+    }
+
+    // 2) Иначе — fallback: жёсткий переход на next_url (без добавления в историю)
+    const nextUrl = back.getAttribute('href');
+    if (nextUrl && nextUrl !== '#') {
+      location.replace(nextUrl); // именно replace, чтобы не плодить историю
+    } else {
+      location.replace('{{ url_for("index") }}');
+    }
+  });
+});
+</script>
+{% endblock %}

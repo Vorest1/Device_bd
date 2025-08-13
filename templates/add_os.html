@@ -1,34 +1,86 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Добавить операционную систему</h2>
+
 <form method="POST" class="row g-3">
+  <!-- Название ОС -->
   <div class="col-md-4">
     <label class="form-label">Название ОС</label>
     <div class="input-group">
       <select class="form-select" name="os_name_id" required>
-        <option value="" disabled selected>Выберите...</option>
-        {% for os in os_names %}
-          <option value="{{ os[0] }}">{{ os[1] }}</option>
+        <option value="" disabled selected>Выберите…</option>
+        {% for n in os_names %}
+          <option value="{{ n[0] }}">{{ n[1] }}</option>
         {% endfor %}
       </select>
-      <a href="{{ url_for('add_os', next=request.path) }}" class="btn btn-outline-secondary" title="Добавить название ОС">+</a>
+      <!-- ВАЖНО: идём добавлять ИМЕННО в os_name, с возвратом обратно в add_os -->
+      <a id="add-osname"
+         href="{{ url_for('add_row', table_name='os_name', next=request.url) }}"
+         class="btn btn-outline-secondary"
+         title="Добавить название ОС">+</a>
     </div>
   </div>
+
   <div class="col-md-4">
-    <label class="form-label">Компания-разработчик</label>
-    <input type="text" class="form-control" name="developer" maxlength="30" required placeholder="Apple, Google и т.д.">
+    <label class="form-label">Разработчик</label>
+    <input class="form-control" name="developer" required>
   </div>
-  <div class="col-md-2">
-    <label class="form-label">Версия</label>
-    <input type="text" class="form-control" name="latest_version" maxlength="30" required>
+
+  <div class="col-md-4">
+    <label class="form-label">Актуальная версия</label>
+    <input class="form-control" name="latest_version" required>
   </div>
-  <div class="col-md-2">
+
+  <div class="col-md-4">
     <label class="form-label">Дата релиза</label>
-    <input type="date" class="form-control" name="release_date" min="1990-01-01" max="{{ today }}" required>
+    <input type="date" class="form-control" name="release_date" max="{{ today }}" required>
   </div>
+
   <input type="hidden" name="next_url" value="{{ next_url }}">
-  <div class="col-12 d-flex justify-content-end">
-    <button type="submit" class="btn btn-success mt-3">Добавить</button>
+  <div class="col-12 d-flex gap-2 justify-content-end">
+    <a id="back-btn" class="btn btn-outline-secondary" href="{{ next_url or '#' }}">Назад</a>
+    <button type="submit" class="btn btn-success">Добавить</button>
   </div>
 </form>
+
+<script>
+(function(){
+  const KEY = 'addOSForm';
+
+  function saveForm(){
+    const data = {};
+    document.querySelectorAll('form [name]').forEach(el=>{
+      data[el.name] = (el.type === 'checkbox') ? el.checked : el.value;
+    });
+    localStorage.setItem(KEY, JSON.stringify(data));
+  }
+
+  // Сохраняем перед уходом по «+»
+  document.getElementById('add-osname')?.addEventListener('click', saveForm);
+
+  // Восстанавливаем при возврате
+  const raw = localStorage.getItem(KEY);
+  if (raw){
+    try{
+      const data = JSON.parse(raw);
+      for (const [k,v] of Object.entries(data)){
+        const el = document.querySelector(`[name="${k}"]`);
+        if (el) el.value = v;
+      }
+    }catch(e){}
+    localStorage.removeItem(KEY);
+  }
+
+  // Умный «Назад» (без зацикливания истории)
+  const back = document.getElementById('back-btn');
+  back?.addEventListener('click', function(e){
+    e.preventDefault();
+    const hasRef = !!document.referrer && new URL(document.referrer).origin === location.origin;
+    if (hasRef && history.length > 1) return history.back();
+    const href = back.getAttribute('href');
+    if (href && href !== '#') location.replace(href);
+    else location.replace('{{ url_for("add_device") }}');
+  });
+})();
+</script>
 {% endblock %}

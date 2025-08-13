@@ -10,9 +10,22 @@
     <label class="form-label">Описание</label>
     <textarea class="form-control" name="description" maxlength="500"></textarea>
   </div>
-  <div class="col-12 d-flex justify-content-end">
+  <!-- <div class="col-12 d-flex justify-content-end">
     <button type="submit" class="btn btn-success mt-3">Добавить</button>
-  </div>
+  </div> -->
+  
   <input type="hidden" name="next_url" value="{{ next_url }}">
+  <div class="d-flex gap-2 justify-content-end mt-2">
+    <a id="back-btn" class="btn btn-outline-secondary"
+      href="{{ next_url or '#' }}">Назад</a>
+    <button type="submit" class="btn btn-success">Добавить</button>
+  </div>
+  <script>
+  document.getElementById('back-btn')?.addEventListener('click', function(e){
+    const href = this.getAttribute('href');
+    if (!href || href === '#') { e.preventDefault(); if (document.referrer) history.back(); }
+  });
+  </script>
+
 </form>
 {% endblock %}

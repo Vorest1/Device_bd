@@ -4,91 +4,142 @@
     <meta charset="utf-8">
     <title>Device DB</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+
+    <!-- Ваши стили/скрипты -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='script.js') }}"></script>
-  </head>
-  <!-- MODAL: Дополнительные характеристики -->
-  <div class="modal fade" id="extrasModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Дополнительные характеристики</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
-        </div>
-        <div class="modal-body p-0" style="height: 75vh;">
-          <iframe id="extrasFrame" src="about:blank" style="border:0;width:100%;height:100%;"></iframe>
-        </div>
-      </div>
-    </div>
-  </div>
 
-  <script>
-    const EXTRAS_URL_BASE = "{{ url_for('edit_extras', device_id=0) }}"; // /device/0/extras
-    let EXTRAS_CURRENT_DEVICE_ID = null;
-    let EXTRAS_FINISHING = false;
+    <!-- Яркая кнопка в navbar -->
+    <!-- NAVBAR: 1.5x шире -->
+    <style>
+      :root{ --nav-scale: 1.5; }
 
-    // Открыть окно доп.характеристик
-    window.openExtrasModal = function(deviceId) {
-      if (!deviceId) return;
-      EXTRAS_CURRENT_DEVICE_ID = deviceId;
-      const extrasUrl = EXTRAS_URL_BASE.replace(/\/\d+(?=\/extras)/, '/' + deviceId) + '?embedded=1';
-      document.getElementById('extrasFrame').src = extrasUrl;
-      new bootstrap.Modal(document.getElementById('extrasModal')).show();
-    };
-
-    // Завершить: закрыть окно и перейти на страницу устройства с msg
-    window.finishExtras = function(deviceId) {
-      deviceId = deviceId || EXTRAS_CURRENT_DEVICE_ID;
-      if (!deviceId) return;
-      EXTRAS_FINISHING = true;
-      EXTRAS_CURRENT_DEVICE_ID = null;
-
-      const base = "{{ url_for('device_detail', device_id=0) }}"; // /device/0
-      const target = base.replace(/\/0$/, '/' + deviceId) + '?added=1';
-
-      // закрываем модалку (если открыта) и переходим
-      const modalEl = document.getElementById('extrasModal');
-      const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-      try { modal.hide(); } catch(e) {}
-      window.location.href = target;
-    };
-
-    document.addEventListener('DOMContentLoaded', function() {
-      // авто-открытие после добавления: ?open_extras_for=<id>
-      const params = new URLSearchParams(window.location.search);
-      const id = params.get('open_extras_for');
-      if (id) openExtrasModal(id);
-
-      // если окно закрыли крестиком/по бэкдропу — делаем то же, что и "Завершить"
-      const modalEl = document.getElementById('extrasModal');
-      modalEl.addEventListener('hidden.bs.modal', function () {
-        if (!EXTRAS_FINISHING && EXTRAS_CURRENT_DEVICE_ID) {
-          // пользователь закрыл окно — считаем, что завершил
-          window.finishExtras(EXTRAS_CURRENT_DEVICE_ID);
+      /* На широких экранах увеличиваем навбар и кнопки */
+      @media (min-width: 992px){
+        /* общая “толщина” панели */
+        .navbar{
+          min-height: calc(56px * var(--nav-scale));
+          padding-top:  calc(.5rem * var(--nav-scale));
+          padding-bottom: calc(.5rem * var(--nav-scale));
         }
-        EXTRAS_FINISHING = false;
-      });
-    });
-  </script>
 
+        /* логотип */
+        .navbar .navbar-brand{
+          font-size: calc(1rem * var(--nav-scale));
+        }
+
+        /* пункты меню (делаем как большие кнопки) */
+        .navbar .nav-link{
+          font-size: calc(.9rem * var(--nav-scale));
+          padding: calc(.45rem * var(--nav-scale)) calc(.9rem * var(--nav-scale));
+          border-radius: .75rem;
+        }
+
+        /* твоя зелёная кнопка “Добавить устройство” — тоже больше */
+        .navbar .btn-add-device{
+          font-size: calc(.9rem * var(--nav-scale));
+          padding: calc(.45rem * var(--nav-scale)) calc(1.1rem * var(--nav-scale));
+          border-radius: 999px;
+        }
+        /* Зеленая “пилюля” в navbar */
+        .navbar .btn-add-device{
+          background: linear-gradient(180deg, #2ae68c, #19c37d);
+          border: 1px solid #13a866;
+          color: #fff !important;
+          box-shadow: 0 2px 10px rgba(25, 195, 125, .35);
+        }
+        .navbar .btn-add-device:hover,
+        .navbar .btn-add-device:focus{
+          background: linear-gradient(180deg, #33f19a, #1fcf7c);
+          border-color: #10a56a;
+          transform: translateY(-1px);
+        }
+
+        /* гамбургер чуть крупнее, чтобы соответствовать размеру панели */
+        .navbar-toggler{
+          padding: .65rem .85rem;
+        }
+        .navbar-toggler-icon{
+          width: 1.5em; height: 1.5em;
+        }
+      }
+    </style>
+
+    {% set EMBEDDED = request.args.get('embedded') or request.form.get('embedded') %}
+    {% if EMBEDDED %}
+    <style>
+      .navbar, footer { display:none !important; }
+      body { padding-top:0 !important; }
+    </style>
+    {% endif %}
+    <script>
+    (function(){
+      try {
+        if (window.top !== window.self) { // открыто во фрейме (модалка)
+          var st = document.createElement('style');
+          st.textContent = '.navbar,footer{display:none!important} body{padding-top:0!important}';
+          document.head.appendChild(st);
+        }
+      } catch(e){}
+    })();
+    </script>
+  </head>
 
   <body>
+    <!-- NAVBAR -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
       <div class="container-fluid">
         <a class="navbar-brand" href="{{ url_for('index') }}">Device DB</a>
-        <div class="navbar-nav">
-          <a class="nav-link" href="{{ url_for('index') }}">Главная</a>
-          <a class="nav-link" href="{{ url_for('tables_list') }}">Таблицы</a>
-          <a class="nav-link" href="{{ url_for('statistic') }}">Статистика</a>
-          <a class="nav-link" href="{{ url_for('search') }}">Поиск</a>
-          <!-- <a class="nav-link" href="{{ url_for('report') }}">Отчёт</a>
-          <a class="nav-link" href="{{ url_for('queries') }}">Запросы</a> -->
-          <a class="nav-link" href="{{ url_for('all_devices') }}">Все устройства</a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"
+                aria-controls="mainNav" aria-expanded="false" aria-label="Переключить навигацию">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="mainNav">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item">
+              <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}"
+                 href="{{ url_for('index') }}">Главная</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if request.endpoint == 'tables_list' %}active{% endif %}"
+                 href="{{ url_for('tables_list') }}">Таблицы</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if request.endpoint == 'statistic' %}active{% endif %}"
+                 href="{{ url_for('statistic') }}">Статистика</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if request.endpoint == 'search' %}active{% endif %}"
+                 href="{{ url_for('search') }}">Поиск</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if request.endpoint == 'all_devices' %}active{% endif %}"
+                 href="{{ url_for('all_devices') }}">Все устройства</a>
+            </li>
+          </ul>
+
+          <!-- Правый блок: яркая кнопка -->
+          <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+            <li class="nav-item ms-lg-2">
+              <a
+                class="btn btn-success btn-sm rounded-pill px-3 btn-add-device {% if request.endpoint == 'add_device' %}active{% endif %}"
+                href="{{ url_for('add_device') }}"
+                role="button"
+              >
+                ＋ Добавить устройство
+              </a>
+            </li>
+          </ul>
         </div>
       </div>
     </nav>
+
+    <!-- CONTENT -->
     <div class="container">
       {% with messages = get_flashed_messages() %}
         {% if messages %}
@@ -99,7 +150,71 @@
       {% endwith %}
       {% block content %}{% endblock %}
     </div>
-    <!-- Bootstrap JS bundle (включает Popper и все дропдауны) -->
+
+    <!-- MODAL: Дополнительные характеристики -->
+    <div class="modal fade" id="extrasModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Дополнительные характеристики</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+          </div>
+          <div class="modal-body p-0" style="height: 75vh;">
+            <iframe id="extrasFrame" src="about:blank" style="border:0;width:100%;height:100%;"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap JS bundle (включает Popper) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Логика модального окна доп.характеристик -->
+    <script>
+      const EXTRAS_URL_BASE = "{{ url_for('edit_extras', device_id=0) }}"; // /device/0/extras
+      let EXTRAS_CURRENT_DEVICE_ID = null;
+      let EXTRAS_FINISHING = false;
+
+      // Открыть окно доп.характеристик
+      window.openExtrasModal = function(deviceId) {
+        if (!deviceId) return;
+        EXTRAS_CURRENT_DEVICE_ID = deviceId;
+        const extrasUrl = EXTRAS_URL_BASE.replace(/\/\d+(?=\/extras)/, '/' + deviceId) + '?embedded=1';
+        document.getElementById('extrasFrame').src = extrasUrl;
+        new bootstrap.Modal(document.getElementById('extrasModal')).show();
+      };
+
+      // Завершить: закрыть окно и перейти на страницу устройства с msg
+      window.finishExtras = function(deviceId) {
+        deviceId = deviceId || EXTRAS_CURRENT_DEVICE_ID;
+        if (!deviceId) return;
+        EXTRAS_FINISHING = true;
+        EXTRAS_CURRENT_DEVICE_ID = null;
+
+        const base = "{{ url_for('device_detail', device_id=0) }}"; // /device/0
+        const target = base.replace(/\/0$/, '/' + deviceId) + '?added=1';
+
+        const modalEl = document.getElementById('extrasModal');
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        try { modal.hide(); } catch(e) {}
+        window.location.href = target;
+      };
+
+      document.addEventListener('DOMContentLoaded', function() {
+        // авто-открытие после добавления: ?open_extras_for=<id>
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('open_extras_for');
+        if (id) openExtrasModal(id);
+
+        // если окно закрыли — считаем «завершить»
+        const modalEl = document.getElementById('extrasModal');
+        modalEl.addEventListener('hidden.bs.modal', function () {
+          if (!EXTRAS_FINISHING && EXTRAS_CURRENT_DEVICE_ID) {
+            window.finishExtras(EXTRAS_CURRENT_DEVICE_ID);
+          }
+          EXTRAS_FINISHING = false;
+        });
+      });
+    </script>
   </body>
 </html>

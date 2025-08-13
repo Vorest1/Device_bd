@@ -1,8 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
+<script>
+(function(){
+  try{
+    if (window.top !== window.self) {
+      var st = document.createElement('style');
+      st.textContent = '.navbar, footer{display:none!important} body{padding-top:0!important}';
+      document.head.appendChild(st);
+    }
+  }catch(e){}
+})();
+</script>
 {% if request.args.get('embedded') %}
 <style>
-  /* Убираем лишний «хром» внутри iframe */
+  /* Убираем «хром» внутри iframe */
   .navbar, footer { display: none !important; }
   .container, .container-fluid { max-width: 100% !important; padding: 0 !important; }
   .card { box-shadow: none; border: 0; }
@@ -10,7 +21,7 @@
 </style>
 {% endif %}
 
-<!-- Модалка-предложение добавить доп.характеристики -->
+<!-- Модалка-компаньон (как было) -->
 <div class="modal fade" id="extrasOfferModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -23,35 +34,19 @@
         <ul class="list-group">
           <li class="list-group-item d-flex justify-content-between">
             Specification
-            {% if spec %}
-              <span class="badge bg-success">заполнено</span>
-            {% else %}
-              <span class="badge bg-secondary">не заполнено</span>
-            {% endif %}
+            {% if spec %}<span class="badge bg-success">заполнено</span>{% else %}<span class="badge bg-secondary">не заполнено</span>{% endif %}
           </li>
           <li class="list-group-item d-flex justify-content-between">
             Display
-            {% if display %}
-              <span class="badge bg-success">заполнено</span>
-            {% else %}
-              <span class="badge bg-secondary">не заполнено</span>
-            {% endif %}
+            {% if display %}<span class="badge bg-success">заполнено</span>{% else %}<span class="badge bg-secondary">не заполнено</span>{% endif %}
           </li>
           <li class="list-group-item d-flex justify-content-between">
             Camera
-            {% if camera %}
-              <span class="badge bg-success">заполнено</span>
-            {% else %}
-              <span class="badge bg-secondary">не заполнено</span>
-            {% endif %}
+            {% if camera %}<span class="badge bg-success">заполнено</span>{% else %}<span class="badge bg-secondary">не заполнено</span>{% endif %}
           </li>
           <li class="list-group-item d-flex justify-content-between">
             Battery
-            {% if battery %}
-              <span class="badge bg-success">заполнено</span>
-            {% else %}
-              <span class="badge bg-secondary">не заполнено</span>
-            {% endif %}
+            {% if battery %}<span class="badge bg-success">заполнено</span>{% else %}<span class="badge bg-secondary">не заполнено</span>{% endif %}
           </li>
         </ul>
       </div>
@@ -65,108 +60,201 @@
 
 <h2>Дополнительные характеристики устройства</h2>
 <ul class="nav nav-tabs mb-3" id="extrasTabs" role="tablist">
-  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#specification">Specification</button></li>
-  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#display">Display</button></li>
-  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#camera">Camera</button></li>
-  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#battery">Battery</button></li>
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#specification">Память</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#display">Дисплей</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#camera">Камера</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#battery">Батарея</button></li>
 </ul>
+
 <div class="tab-content">
   <!-- Specification -->
   <div class="tab-pane fade show active" id="specification">
-    <form method="POST">
+    <form method="POST" class="needs-validation" novalidate>
+      <input type="hidden" name="embedded" value="{{ 1 if request.args.get('embedded') else '' }}">
       <input type="hidden" name="tab" value="specification">
       <div class="row g-3">
         <div class="col-md-4">
-          <label>Модель процессора</label>
-          <select class="form-select" name="proc_model_id">
-            <option value="" selected>Не выбрано</option>
-            {% for m in proc_models %}
-              <option value="{{ m[0] }}" {% if spec and spec[2]==m[0] %}selected{% endif %}>{{ m[1] }}</option>
-            {% endfor %}
-          </select>
+          <label class="form-label">Модель процессора</label>
+          <div class="input-group">
+            <select class="form-select" name="proc_model_id" required>
+              <option value="" selected>Не выбрано</option>
+              {% for m in proc_models %}
+                <option value="{{ m[0] }}" {% if spec and spec[2]==m[0] %}selected{% endif %}>{{ m[1] }}</option>
+              {% endfor %}
+            </select>
+            <a class="btn btn-outline-secondary dict-add-btn"
+               data-tab="specification"
+               href="{{ url_for('add_row',
+                                table_name='proc_model',
+                                next=url_for('edit_extras', device_id=device_id, embedded=1),
+                                embedded=1) }}"
+               title="Добавить модель процессора">+</a>
+            <div class="invalid-feedback">Выберите модель процессора.</div>
+          </div>
         </div>
+
         <div class="col-md-2">
-          <label>Ядер</label>
-          <input type="number" class="form-control" name="processor_cores" min="1" max="20" value="{{ spec[3] if spec else '' }}">
+          <label class="form-label">Ядер</label>
+          <input type="number" class="form-control" name="processor_cores"
+                 min="1" max="20" required
+                 value="{{ spec[3] if spec else '' }}" placeholder="напр., 8">
+          <div class="invalid-feedback">Укажите число ядер (1–20).</div>
         </div>
+
         <div class="col-md-2">
-          <label>RAM (Гб)</label>
-          <input type="number" class="form-control" name="ram_gb" min="1" max="32" value="{{ spec[4] if spec else '' }}">
+          <label class="form-label">RAM (Гб)</label>
+          <input type="number" class="form-control" name="ram_gb"
+                 min="1" max="32" required
+                 value="{{ spec[4] if spec else '' }}" placeholder="напр., 8">
+          <div class="invalid-feedback">Укажите объём RAM (1–32 Гб).</div>
         </div>
+
         <div class="col-md-2">
-          <label>Память (Гб)</label>
-          <input type="number" class="form-control" name="storage_gb" min="1" max="2048" value="{{ spec[5] if spec else '' }}">
+          <label class="form-label">Память (Гб)</label>
+          <input type="number" class="form-control" name="storage_gb"
+                 min="1" max="2048" required
+                 value="{{ spec[5] if spec else '' }}" placeholder="напр., 256">
+          <div class="invalid-feedback">Укажите объём накопителя (1–2048 Гб).</div>
         </div>
+
         <div class="col-md-2">
-          <label>Тип накопителя</label>
-          <select class="form-select" name="storage_type_id">
-            <option value="" selected>Не выбрано</option>
-            {% for st in storage_types %}
-              <option value="{{ st[0] }}" {% if spec and spec[6]==st[0] %}selected{% endif %}>{{ st[1] }}</option>
-            {% endfor %}
-          </select>
+          <label class="form-label">Тип накопителя</label>
+          <div class="input-group">
+            <select class="form-select" name="storage_type_id" required>
+              <option value="" selected>Не выбрано</option>
+              {% for st in storage_types %}
+                <option value="{{ st[0] }}" {% if spec and spec[6]==st[0] %}selected{% endif %}>{{ st[1] }}</option>
+              {% endfor %}
+            </select>
+            <a class="btn btn-outline-secondary dict-add-btn"
+               data-tab="specification"
+               href="{{ url_for('add_row',
+                                table_name='storage_type',
+                                next=url_for('edit_extras', device_id=device_id, embedded=1),
+                                embedded=1) }}"
+               title="Добавить тип накопителя">+</a>
+            <div class="invalid-feedback">Выберите тип накопителя.</div>
+          </div>
         </div>
       </div>
-      <div class="mt-3"><button class="btn btn-success">Сохранить</button></div>
+
+      <div class="mt-3">
+        <button class="btn btn-success" type="submit">Сохранить</button>
+      </div>
     </form>
   </div>
+
   <!-- Display -->
   <div class="tab-pane fade" id="display">
-    <form method="POST">
+    <form method="POST" class="needs-validation" novalidate>
+      <input type="hidden" name="embedded" value="{{ 1 if request.args.get('embedded') else '' }}">
       <input type="hidden" name="tab" value="display">
       <div class="row g-3">
         <div class="col-md-2">
-          <label>Диагональ (дюйм)</label>
-          <input type="number" step="0.1" class="form-control" name="diagonal_inches" min="1.0" max="100.0" value="{{ display[2] if display else '' }}">
+          <label class="form-label">Диагональ (дюйм)</label>
+          <input type="number" step="0.1" class="form-control" name="diagonal_inches"
+                 min="1.0" max="100.0" required
+                 value="{{ display[2] if display else '' }}" placeholder="напр., 6.1">
+          <div class="invalid-feedback">Укажите диагональ (1.0–100.0").</div>
         </div>
+
         <div class="col-md-2">
-          <label>Разрешение</label>
-          <input type="text" class="form-control" name="resolution" minlength="7" maxlength="9" value="{{ display[3] if display else '' }}">
+          <label class="form-label">Разрешение</label>
+          <input type="text" class="form-control" name="resolution"
+                 minlength="7" maxlength="11" required
+                 pattern="^\s*\d{3,5}\s*[xX×*]\s*\d{3,5}\s*$"
+                 title="Формат: ширина×высота, напр. 2400x1080"
+                 value="{{ display[3] if display else '' }}" placeholder="напр., 2400x1080">
+          <div class="invalid-feedback">Формат: ширина×высота (например, 2400x1080).</div>
         </div>
+
         <div class="col-md-3">
-          <label>Технология матрицы</label>
-          <select class="form-select" name="techn_matr_id">
-            <option value="" selected>Не выбрано</option>
-            {% for tm in techn_matrices %}
-              <option value="{{ tm[0] }}" {% if display and display[4]==tm[0] %}selected{% endif %}>{{ tm[1] }}</option>
-            {% endfor %}
-          </select>
+          <label class="form-label">Технология матрицы</label>
+          <div class="input-group">
+            <select class="form-select" name="techn_matr_id" required>
+              <option value="" selected>Не выбрано</option>
+              {% for tm in techn_matrices %}
+                <option value="{{ tm[0] }}" {% if display and display[4]==tm[0] %}selected{% endif %}>{{ tm[1] }}</option>
+              {% endfor %}
+            </select>
+            <a class="btn btn-outline-secondary dict-add-btn"
+               data-tab="display"
+               href="{{ url_for('add_row',
+                                table_name='techn_matr',
+                                next=url_for('edit_extras', device_id=device_id, embedded=1),
+                                embedded=1) }}"
+               title="Добавить технологию матрицы">+</a>
+            <div class="invalid-feedback">Выберите технологию матрицы.</div>
+          </div>
         </div>
+
         <div class="col-md-2">
-          <label>Частота (Гц)</label>
-          <input type="number" class="form-control" name="refresh_rate_hz" min="1" max="360" value="{{ display[5] if display else '' }}">
+          <label class="form-label">Частота (Гц)</label>
+          <input type="number" class="form-control" name="refresh_rate_hz"
+                 min="1" max="360" required
+                 value="{{ display[5] if display else '' }}" placeholder="напр., 120">
+          <div class="invalid-feedback">Укажите частоту обновления (1–360 Гц).</div>
         </div>
+
         <div class="col-md-2">
-          <label>Яркость (нит)</label>
-          <input type="number" class="form-control" name="brightness_nits" min="1" max="10000" value="{{ display[6] if display else '' }}">
+          <label class="form-label">Яркость (нит)</label>
+          <input type="number" class="form-control" name="brightness_nits"
+                 min="1" max="10000" required
+                 value="{{ display[6] if display else '' }}" placeholder="напр., 800">
+          <div class="invalid-feedback">Укажите яркость (1–10000 нит).</div>
         </div>
       </div>
-      <div class="mt-3"><button class="btn btn-success">Сохранить</button></div>
+
+      <div class="mt-3">
+        <button class="btn btn-success" type="submit">Сохранить</button>
+      </div>
     </form>
   </div>
+
   <!-- Camera -->
   <div class="tab-pane fade" id="camera">
-    <form method="POST">
+    <form method="POST" class="needs-validation" novalidate>
+      <input type="hidden" name="embedded" value="{{ 1 if request.args.get('embedded') else '' }}">
       <input type="hidden" name="tab" value="camera">
       <div class="row g-3">
         <div class="col-md-2">
-          <label>Мпикс</label>
-          <input type="number" step="0.1" class="form-control" name="megapixels_main" min="2.0" max="33.0" value="{{ camera[2] if camera else '' }}">
+          <label class="form-label">Мпикс</label>
+          <input type="number" step="0.1" class="form-control" name="megapixels_main"
+                 min="2.0" max="200.0" required
+                 value="{{ camera[2] if camera else '' }}" placeholder="напр., 12.0">
+          <div class="invalid-feedback">Укажите мегапиксели (2.0–200.0).</div>
         </div>
+
         <div class="col-md-2">
-          <label>Диафрагма</label>
-          <input type="text" class="form-control" name="aperture_main" minlength="3" maxlength="4" value="{{ camera[3] if camera else '' }}">
+          <label class="form-label">Диафрагма</label>
+          <input type="text" class="form-control" name="aperture_main"
+                 minlength="1" maxlength="4" required
+                 pattern="^\d(\.\d)?$"
+                 title="Только число, напр. 1.8"
+                 value="{{ camera[3] if camera else '' }}" placeholder="напр., 1.8">
+          <div class="invalid-feedback">Укажите диафрагму (например, 1.8).</div>
         </div>
+
         <div class="col-md-2">
-          <label>Зум</label>
-          <input type="number" step="0.1" class="form-control" name="optical_zoom_x" min="0.0" max="144.0" value="{{ camera[4] if camera else '' }}">
+          <label class="form-label">Зум (x)</label>
+          <input type="number" step="0.1" class="form-control" name="optical_zoom_x"
+                 min="0.0" max="144.0" required
+                 value="{{ camera[4] if camera else '' }}" placeholder="напр., 3.0">
+          <div class="invalid-feedback">Укажите оптический зум (0.0–144.0x).</div>
         </div>
+
         <div class="col-md-3">
-          <label>Видео</label>
-          <input type="text" class="form-control" name="video_resolution" minlength="7" maxlength="9" value="{{ camera[5] if camera else '' }}">
+          <label class="form-label">Видео</label>
+          <input type="text" class="form-control" name="video_resolution"
+                 minlength="7" maxlength="11" required
+                 pattern="^\s*\d{3,5}\s*[xX×*]\s*\d{3,5}\s*$"
+                 title="Формат: ширина×высота, напр. 3840x2160"
+                 value="{{ camera[5] if camera else '' }}" placeholder="напр., 3840x2160">
+          <div class="invalid-feedback">Формат: ширина×высота (например, 3840x2160).</div>
         </div>
+
         <div class="col-md-3">
-          <label>ИИ-улучшение</label>
+          <label class="form-label">ИИ-улучшение</label>
           <div class="form-check">
             <input type="checkbox" class="form-check-input" name="has_ai_enhance" id="ai_enhance"
                 {% if camera and camera[6] == 1 %}checked{% endif %}>
@@ -174,44 +262,64 @@
           </div>
         </div>
       </div>
-      <div class="mt-3"><button class="btn btn-success">Сохранить</button></div>
+
+      <div class="mt-3">
+        <button class="btn btn-success" type="submit">Сохранить</button>
+      </div>
     </form>
   </div>
+
   <!-- Battery -->
   <div class="tab-pane fade" id="battery">
-    <form method="POST">
+    <form method="POST" class="needs-validation" novalidate>
+      <input type="hidden" name="embedded" value="{{ 1 if request.args.get('embedded') else '' }}">
       <input type="hidden" name="tab" value="battery">
       <div class="row g-3">
         <div class="col-md-3">
-          <label>Ёмкость (мАч)</label>
-          <input type="number" class="form-control" name="capacity_mah" min="1" max="20000" value="{{ battery[2] if battery else '' }}">
+          <label class="form-label">Ёмкость (мАч)</label>
+          <input type="number" class="form-control" name="capacity_mah"
+                 min="1" max="20000" required
+                 value="{{ battery[2] if battery else '' }}" placeholder="напр., 5000">
+          <div class="invalid-feedback">Укажите ёмкость (1–20000 мАч).</div>
         </div>
+
         <div class="col-md-3">
-          <label>Быстрая зарядка (Вт)</label>
-          <input type="number" step="0.1" class="form-control" name="fast_charging_w" min="0.0" max="20.0" value="{{ battery[3] if battery else '' }}">
+          <label class="form-label">Быстрая зарядка (Вт)</label>
+          <input type="number" step="0.1" class="form-control" name="fast_charging_w"
+                 min="0.0" max="1000.0" required
+                 value="{{ battery[3] if battery else '' }}" placeholder="напр., 33.0">
+          <div class="invalid-feedback">Укажите мощность быстрой зарядки (Вт).</div>
         </div>
+
         <div class="col-md-3">
-          <label>Беспроводная зарядка</label>
+          <label class="form-label">Беспроводная зарядка</label>
           <div class="form-check">
             <input type="checkbox" class="form-check-input" name="wireless_charging" id="wireless_charging"
                 {% if battery and battery[4] == 1 %}checked{% endif %}>
             <label for="wireless_charging" class="form-check-label">Да</label>
           </div>
         </div>
+
         <div class="col-md-3">
-          <label>Время работы (ч)</label>
-          <input type="number" step="0.1" class="form-control" name="estimated_life_hours" min="0.0" max="96.0" value="{{ battery[5] if battery else '' }}">
+          <label class="form-label">Время работы (ч)</label>
+          <input type="number" step="0.1" class="form-control" name="estimated_life_hours"
+                 min="0.0" max="96.0" required
+                 value="{{ battery[5] if battery else '' }}" placeholder="напр., 24.0">
+          <div class="invalid-feedback">Укажите оценку времени работы (часы).</div>
         </div>
       </div>
-      <div class="mt-3"><button class="btn btn-success">Сохранить</button></div>
+
+      <div class="mt-3">
+        <button class="btn btn-success" type="submit">Сохранить</button>
+      </div>
     </form>
   </div>
 </div>
+
 <button type="button" class="btn btn-success"
         onclick="if (window.parent && window.parent.finishExtras) {
                    window.parent.finishExtras({{ device_id }});
                  } else {
-                   // если страница открыта отдельно, а не в модалке
                    window.location.href='{{ url_for('device_detail', device_id=device_id) }}?added=1';
                  }">
   Завершить
@@ -226,7 +334,7 @@ document.addEventListener('DOMContentLoaded', function () {
     modal.show();
   }
 
-  // Определить первую незаполненную вкладку
+  // Первая незаполненная вкладка
   const firstIncomplete =
     {% if not spec %}'specification'
     {% elif not display %}'display'
@@ -234,18 +342,94 @@ document.addEventListener('DOMContentLoaded', function () {
     {% elif not battery %}'battery'
     {% else %}null{% endif %};
 
-  // Кнопка "Заполнить сейчас" — открыть первую незаполненную вкладку
-  const startBtn = document.getElementById('startFillBtn');
-  if (startBtn) {
-    startBtn.addEventListener('click', function () {
-      if (!firstIncomplete) return;
-      const trigger = document.querySelector(`[data-bs-target="#${firstIncomplete}"]`);
-      if (trigger) {
-        new bootstrap.Tab(trigger).show();
-        trigger.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('startFillBtn')?.addEventListener('click', function () {
+    if (!firstIncomplete) return;
+    const trigger = document.querySelector(`[data-bs-target="#${firstIncomplete}"]`);
+    if (trigger) {
+      new bootstrap.Tab(trigger).show();
+      trigger.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+
+  const deviceId = {{ device_id }};
+  const STORAGE_KEY = (tab) => `extras:${deviceId}:${tab}`;
+  const TAB_KEY = `extras:${deviceId}:activeTab`;
+
+  function serializeForm(form) {
+    const data = {};
+    [...form.elements].forEach(el => {
+      if (!el.name) return;
+      data[el.name] = (el.type === 'checkbox') ? (el.checked ? 'on':'') : el.value;
+    });
+    return data;
+  }
+  function restoreForm(form, data) {
+    if (!data) return;
+    [...form.elements].forEach(el => {
+      if (!el.name) return;
+      if (data.hasOwnProperty(el.name)) {
+        if (el.type === 'checkbox') el.checked = data[el.name] === 'on';
+        else el.value = data[el.name];
       }
     });
   }
+  function getActiveTabId() {
+    const trigger = document.querySelector('#extrasTabs .nav-link.active');
+    return trigger ? trigger.getAttribute('data-bs-target').replace('#','') : 'specification';
+  }
+  function setActiveTab(tabId) {
+    const trigger = document.querySelector(`[data-bs-target="#${tabId}"]`);
+    if (trigger) new bootstrap.Tab(trigger).show();
+  }
+
+  // Запоминаем активную вкладку
+  document.querySelectorAll('#extrasTabs .nav-link').forEach(btn => {
+    btn.addEventListener('shown.bs.tab', () => {
+      localStorage.setItem(TAB_KEY, getActiveTabId());
+    });
+  });
+
+  // Сохраняем форму перед переходом по «+»
+  document.querySelectorAll('.dict-add-btn').forEach(a => {
+    a.addEventListener('click', () => {
+      const tabId = a.dataset.tab;
+      const form = document.querySelector(`#${tabId} form`);
+      if (form) {
+        localStorage.setItem(STORAGE_KEY(tabId), JSON.stringify(serializeForm(form)));
+        localStorage.setItem(TAB_KEY, tabId);
+      }
+    });
+  });
+
+  // Восстановление после возврата
+  const savedTab = localStorage.getItem(TAB_KEY);
+  if (savedTab) setActiveTab(savedTab);
+  ['specification','display','camera','battery'].forEach(tabId => {
+    const saved = localStorage.getItem(STORAGE_KEY(tabId));
+    if (saved) {
+      const form = document.querySelector(`#${tabId} form`);
+      if (form) {
+        try { restoreForm(form, JSON.parse(saved)); } catch(e) {}
+        localStorage.removeItem(STORAGE_KEY(tabId));
+      }
+    }
+  });
+
+  // Единая валидация для всех подформ
+  document.querySelectorAll('.tab-pane form.needs-validation').forEach(form => {
+    form.addEventListener('submit', function (e) {
+      if (!form.checkValidity()) {
+        e.preventDefault();
+        e.stopPropagation();
+        form.classList.add('was-validated');
+        const firstInvalid = form.querySelector(':invalid');
+        if (firstInvalid) {
+          try { firstInvalid.focus({preventScroll:true}); } catch(e){}
+          firstInvalid.scrollIntoView({behavior:'smooth', block:'center'});
+        }
+      }
+    });
+  });
 });
 </script>
 

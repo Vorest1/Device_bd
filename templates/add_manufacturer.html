@@ -6,14 +6,22 @@
     <label class="form-label">Название</label>
     <input type="text" class="form-control" name="name" maxlength="30" required>
   </div>
+
   <div class="col-md-4">
     <label class="form-label">Страна</label>
-    <select class="form-select" name="country_id" required>
-      {% for c in countries %}
-        <option value="{{ c[0] }}">{{ c[1] }}</option>
-      {% endfor %}
-    </select>
+    <div class="input-group">
+      <select class="form-select" name="country_id" required>
+        {% for c in countries %}
+          <option value="{{ c[0] }}">{{ c[1] }}</option>
+        {% endfor %}
+      </select>
+      <!-- НОВОЕ: плюс для country -->
+      <a href="{{ url_for('add_row', table_name='country', next=request.path) }}"
+        class="btn btn-outline-secondary"
+        title="Добавить страну">+</a>
+    </div>
   </div>
+
   <div class="col-md-2">
     <label class="form-label">Год основания</label>
     <input type="number" class="form-control" name="foundation_year" min="1990" max="2025" required>
@@ -22,9 +30,83 @@
     <label class="form-label">Сайт</label>
     <input type="url" class="form-control" name="website" maxlength="60" required placeholder="https://example.com">
   </div>
-  <div class="col-12 d-flex justify-content-end">
+  <!-- <div class="col-12 d-flex justify-content-end">
     <button type="submit" class="btn btn-success mt-3">Добавить</button>
-  </div>
+  </div> -->
+
   <input type="hidden" name="next_url" value="{{ next_url }}">
+
+  <div class="d-flex gap-2 justify-content-end mt-2">
+    <a id="back-btn" 
+       class="btn btn-outline-secondary" 
+       href="{{ next_url or '#' }}">Назад</a>
+    <button type="submit" class="btn btn-success">Добавить</button>
+  </div>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Сохранение/восстановление формы производителя, чтобы
+    // не потерять введённое при добавлении Страны через «+»
+    const KEY = 'addManufacturerForm';
+
+    // ВОССТАНОВИТЬ
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      try {
+        const data = JSON.parse(raw);
+        for (const [k, v] of Object.entries(data)) {
+          const el = document.querySelector(`[name="${k}"]`);
+          if (!el) continue;
+          if (el.type === 'checkbox') el.checked = !!v;
+          else el.value = v;
+        }
+      } catch {}
+      localStorage.removeItem(KEY);
+    }
+
+    // СОХРАНИТЬ
+    function saveForm() {
+      const data = {};
+      document.querySelectorAll('form [name]').forEach(el => {
+        data[el.name] = (el.type === 'checkbox') ? el.checked : el.value;
+      });
+      localStorage.setItem(KEY, JSON.stringify(data));
+    }
+
+    // Сохраняем перед уходом по «+» (например, добавить страну)
+    document.querySelectorAll('a.btn, a.btn-outline-secondary').forEach(a => {
+      if (a.id !== 'back-btn') a.addEventListener('click', saveForm);
+    });
+
+    // «Назад» — тоже сохраняем, на всякий случай
+    const back = document.getElementById('back-btn');
+    back.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      // (необязательно) перед уходом можно сохранить форму производителя
+      try {
+        const data = {};
+        document.querySelectorAll('form [name]').forEach(el => {
+          data[el.name] = (el.type === 'checkbox') ? el.checked : el.value;
+        });
+        localStorage.setItem('addManufacturerForm', JSON.stringify(data));
+      } catch {}
+
+      const hasRef = !!document.referrer && new URL(document.referrer).origin === location.origin;
+      if (hasRef && history.length > 1) {
+        history.back();
+        return;
+      }
+
+      const nextUrl = back.getAttribute('href');
+      if (nextUrl && nextUrl !== '#') {
+        location.replace(nextUrl);
+      } else {
+        location.replace('{{ url_for("index") }}');
+      }
+    });
+  });
+  </script>
+
 </form>
 {% endblock %}

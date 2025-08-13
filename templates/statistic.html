@@ -8,6 +8,7 @@
   .mini-bar .track { height: .75rem; background: rgba(0,0,0,.08); border-radius: .5rem; overflow: hidden; }
   .mini-bar .bar { height: 100%; background: rgba(13,110,253,.7); }
   .section-title { margin: 1.2rem 0 .6rem; }
+  stat-info { scroll-margin-top: 72px; }
 </style>
 
 <h2 class="mb-2">Статистика</h2>
@@ -179,9 +180,46 @@
   </div>
 </div>
 
+<!-- Таблицы базы данных (перенесено с главной) -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="card-title mb-3">Таблицы базы данных</h5>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle text-center">
+        <thead>
+          <tr>
+            <th>Название таблицы</th>
+            <th>Что содержит</th>
+            <th>Количество элементов</th>
+            <th>Количество атрибутов</th>
+            <th>Назначение</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tables_info %}
+            <tr>
+              <td class="text-nowrap">{{ t.name }}</td>
+              <td class="text-start">{{ t.rus }}</td>
+              <td>{{ t.rows }}</td>
+              <td>{{ t.columns }}</td>
+              <td class="text-nowrap">{{ t.purpose }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="form-text">
+      Назначение: <strong>главная</strong> — основная сущность (устройства),
+      <strong>справочник</strong> — классификаторы и списки,
+      <strong>дополнительная</strong> — детализация и связующие таблицы.
+    </div>
+  </div>
+</div>
+
 <!-- СПРАВКА (ГРУППИРОВКИ) -->
-<h5 class="section-title">Справка (группировки)</h5>
-<form method="POST" class="row g-3 mb-2">
+<section id="stat-info">
+  <h5 class="section-title">Справка (группировки)</h5>
+  <form method="POST" action="{{ url_for('statistic') }}#stat-info" class="row g-3 mb-2">
   <div class="col-md-6">
     <label class="form-label">Группировать по:</label>
     <select class="form-select" name="info_by">
@@ -239,5 +277,6 @@
 {% else %}
   <div class="alert alert-info">Выберите параметр и нажмите «Показать».</div>
 {% endif %}
+</section>
 
 {% endblock %}
