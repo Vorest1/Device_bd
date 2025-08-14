@@ -1,57 +1,112 @@
 {% extends "base.html" %}
-  <style>
-  .table-actions { white-space: nowrap; }
-  .table-responsive { overflow-x: auto; } /* если обёрнуто в .table-responsive */
-  </style>
 {% block content %}
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h2 class="mb-0">Таблица: {{ table }}</h2>
-    <a class="btn btn-success"
-       href="{{ url_for('add_row', table_name=table, next=request.full_path) }}">
-      + Добавить запись
-    </a>
-  </div>
+  {% set t = table|lower %}
+  {% set admin = (is_admin if (is_admin is defined) else (current_user.is_authenticated and current_user.is_admin)) %}
+  {% set blocked = ['displays','batteries','cameras','specifications','device_retailers', 'users'] %}
 
-  {% if is_dictionary %}
-    <div class="alert alert-secondary py-2">
-      Элемент справочника нельзя удалить, если он используется хотя бы в одной записи.
+  {# Полное скрытие users для не-админа #}
+  {% if t == 'users' and not admin %}
+    {# ничего не показываем #}
+
+  {% else %}
+    <style>
+      .table-actions { white-space: nowrap; }
+      .table-responsive { overflow-x: auto; }
+    </style>
+
+    {# Найдём индексы колонок, которые надо скрыть #}
+    {% set ns = namespace(created_by_idx = -1, hidden_cols = []) %}
+    {% for c in columns %}
+      {% if c|lower == 'created_by' %}
+        {% set ns.created_by_idx = loop.index0 %}
+      {% endif %}
+      {# password_hash скрываем всегда в таблице users #}
+      {% if t == 'users' and c|lower in ['password_hash'] %}
+        {% set _ = ns.hidden_cols.append(loop.index0) %}
+      {% endif %}
+    {% endfor %}
+    {# created_by скрываем у не-админа в devices #}
+    {% if t == 'devices' and not admin and ns.created_by_idx != -1 %}
+      {% set _ = ns.hidden_cols.append(ns.created_by_idx) %}
+    {% endif %}
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h2 class="mb-0">Таблица: {{ table }}</h2>
+
+      {# Кнопка «+ Добавить запись» — только админ и не для дочерних таблиц #}
+      {% if admin and t not in blocked %}
+        {% set add_href = url_for('add_row', table_name=table, next=request.full_path) %}
+        {% if t == 'retailers' %}
+          {% set add_href = url_for('add_retailer', next=request.full_path) %}
+        {% elif t == 'categories' %}
+          {% set add_href = url_for('add_category', next=request.full_path) %}
+        {% elif t in ['manufacturers','manufacturer'] %}
+          {% set add_href = url_for('add_manufacturer', next=request.full_path) %}
+        {% elif t in ['os','operating_systems','os_name'] %}
+          {% set add_href = url_for('add_os', next=request.full_path) %}
+        {% endif %}
+        <a class="btn btn-success" href="{{ add_href }}">+ Добавить запись</a>
+      {% endif %}
     </div>
-  {% endif %}
 
-  <div class="table-responsive">
-    <table class="table table-bordered table-sm align-middle">
-      <thead>
-        <tr>
-          {% for col in columns %}<th>{{ col }}</th>{% endfor %}
-          <th class="text-center">Действия</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
+    {# Предупреждение о справочниках — только админ #}
+    {% if is_dictionary and admin %}
+      <div class="alert alert-secondary py-2">
+        Элемент справочника нельзя удалить, если он используется хотя бы в одной записи.
+      </div>
+    {% endif %}
+
+    <div class="table-responsive">
+      <table class="table table-bordered table-sm align-middle">
+        <thead>
           <tr>
-            {% for cell in row %}
-              <td class="text-nowrap">{{ cell }}</td>
+            {% for col in columns %}
+              {% if loop.index0 not in ns.hidden_cols %}
+                <th>{{ col }}</th>
+              {% endif %}
             {% endfor %}
-            <td class="text-center table-actions">
-              {% set pk_val = row[0] %}
-              <form method="post"
-                    action="{% if table == 'devices' %}{{ url_for('delete_device', device_id=pk_val) }}{% else %}{{ url_for('delete_row', table_name=table, pk=pk_val) }}{% endif %}"
-                    class="d-inline-block"
-                    onsubmit="return confirmDelete('{{ table }}','{{ pk_val }}')">
-                <button type="submit" class="btn btn-sm btn-outline-danger">Удалить</button>
-              </form>
-            </td>
+            {% if admin %}
+              <th class="text-center">Действия</th>
+            {% endif %}
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              {% for cell in row %}
+                {% if loop.index0 not in ns.hidden_cols %}
+                  <td class="text-nowrap">{{ cell }}</td>
+                {% endif %}
+              {% endfor %}
 
-  <script>
-    // мини-скрипт подтверждения — остаётся в этом .html
-    function confirmDelete(table, id) {
-      return confirm(`Удалить запись из «${table}» (ID=${id})?`);
-    }
-  </script>
+              {% if admin %}
+                {% set pk_val = row[0] %}
+                <td class="text-center table-actions">
+                  {# В users не даём удалить самого себя #}
+                  {% if t == 'users' and (current_user.is_authenticated and pk_val == current_user.id) %}
+                    <span class="text-muted">это вы</span>
+                  {% else %}
+                    <form method="post"
+                          action="{% if t == 'devices' %}{{ url_for('delete_device', device_id=pk_val) }}{% else %}{{ url_for('delete_row', table_name=table, pk=pk_val) }}{% endif %}"
+                          class="d-inline-block"
+                          onsubmit="return confirmDelete('{{ table }}','{{ pk_val }}')">
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Удалить</button>
+                    </form>
+                  {% endif %}
+                </td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
 
+    {% if admin %}
+    <script>
+      function confirmDelete(table, id) {
+        return confirm(`Удалить запись из «${table}» (ID=${id})?`);
+      }
+    </script>
+    {% endif %}
+  {% endif %}
 {% endblock %}

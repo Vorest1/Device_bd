@@ -1,15 +1,64 @@
 {% extends "base.html" %}
 {% block content %}
+
+
+{# Словарь русских подписей для типовых колонок #}
+{% set RU_LABELS = {
+  'name': 'Название',
+  'title': 'Название',
+  'model': 'Модель',
+  'description': 'Описание',
+  'website': 'Сайт',
+  'rating': 'Оценка',
+  'price': 'Цена',
+  'current_price': 'Текущая цена',
+  'site_price': 'Цена на сайте',
+  'in_stock': 'В наличии',
+  'last_updated': 'Дата обновления',
+
+  'device_id': 'Устройство',
+  'manufacturer_id': 'Производитель',
+  'category_id': 'Категория',
+  'color_id': 'Цвет',
+  'country_id': 'Страна',
+  'retailer_id': 'Продавец',
+  'storage_type_id': 'Тип накопителя',
+  'proc_model_id': 'Модель процессора',
+  'techn_matr_id': 'Технология матрицы',
+  'os_id': 'Операционная система',
+  'os_name_id': 'Название ОС',
+  'latest_version': 'Последняя версия',
+
+  'processor_cores': 'Ядер',
+  'ram_gb': 'RAM (ГБ)',
+  'storage_gb': 'Память (ГБ)',
+  'diagonal_inches': 'Диагональ (″)',
+  'resolution': 'Разрешение',
+  'refresh_rate_hz': 'Частота (Гц)',
+  'brightness_nits': 'Яркость (нит)',
+  'megapixels_main': 'Мпикс (основная)',
+  'aperture_main': 'Диафрагма',
+  'optical_zoom_x': 'Оптический зум (×)',
+  'video_resolution': 'Видео (разрешение)',
+  'has_ai_enhance': 'ИИ-улучшение',
+  'capacity_mah': 'Ёмкость (мА·ч)',
+  'fast_charging_w': 'Быстрая зарядка (Вт)',
+  'wireless_charging': 'Беспроводная зарядка',
+  'estimated_life_hours': 'Время работы (ч)'
+} %}
+
 <h2 class="mb-3">Добавить запись в «{{ table }}»</h2>
 
 <form method="POST" class="row g-3">
   {% for col in columns %}
+    {% set label = RU_LABELS.get(col, col) %}
     <div class="col-md-6">
-      <label class="form-label">{{ col }}</label>
-      <input type="text" class="form-control" name="{{ col }}" required>
+      <label class="form-label">{{ label }}</label>
+      <input type="text" class="form-control" name="{{ col }}" required placeholder="{{ label }}">
+      <div class="invalid-feedback">Заполните поле «{{ label }}».</div>
     </div>
   {% endfor %}
-
+  
   <input type="hidden" name="next_url" value="{{ next_url }}">
 
   <input type="hidden" name="embedded"

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2 class="mb-1">Профиль</h2>
+  {% if current_user.is_authenticated and current_user.is_admin %}
+  <p class="text-muted mb-4">Информация об аккаунте и устройства, добавленные вами.</p>
+  {% endif %}
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title mb-3">Аккаунт</h5>
+          <dl class="row mb-0">
+            <dt class="col-5">Логин</dt><dd class="col-7">{{ user.username }}</dd>
+            <dt class="col-5">Email</dt><dd class="col-7">{{ user.email or '—' }}</dd>
+            <dt class="col-5">Зарегистрирован</dt><dd class="col-7">{{ user.created_at }}</dd>
+          </dl>
+          <hr>
+          <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm">Выйти</a>
+        </div>
+      </div>
+    </div>
+    {% if current_user.is_authenticated and current_user.is_admin %}
+    <div class="col-md-8">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between">
+            <h5 class="card-title mb-0">Добавленные устройства</h5>
+              <a href="{{ url_for('add_device') }}" class="btn btn-success btn-sm">＋ Добавить устройство</a>
+          </div>
+
+          <div class="table-responsive mt-3">
+            {% if devices %}
+              <table class="table table-striped align-middle">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Модель</th>
+                    <th>Производитель</th>
+                    <th>Категория</th>
+                    <th>Цена</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for d in devices %}
+                    <tr>
+                      <td>{{ d.device_id }}</td>
+                      <td>{{ d.model }}</td>
+                      <td>{{ d.manufacturer }}</td>
+                      <td>{{ d.category }}</td>
+                      <td>{{ d.current_price if d.current_price is not none else '—' }}</td>
+                      <td class="text-end">
+                        <a href="{{ url_for('device_detail', device_id=d.device_id) }}" class="btn btn-sm btn-outline-primary">Открыть</a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% else %}
+              <div class="text-muted">Вы ещё не добавляли устройства.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+{% endblock %}

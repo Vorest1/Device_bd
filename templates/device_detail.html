@@ -13,10 +13,14 @@
     <li><b>Цвет:</b> {{ main[7] }}</li>
   </ul>
 
-  <a href="{{ url_for('edit_extras', device_id=device_id) }}" class="btn btn-outline-primary">
-    Изменить/Добавить Доп.Характеристики
-  </a>
-
+  {# Кнопка доступна только администратору #}
+  {% if current_user.is_authenticated and current_user.is_admin %}
+    <!-- Открываем edit_extras поверх (overlay) -->
+    <a class="btn btn-outline-primary"
+       data-overlay="1"
+       data-title="Доп. характеристики устройства"
+       href="{{ url_for('edit_extras', device_id=device_id, embedded=1) }}">Доп. характеристики</a>
+  {% endif %}
   
   {% if retailers %}
     <h4>Где купить</h4>

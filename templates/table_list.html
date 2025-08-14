@@ -1,11 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Все таблицы</h2>
-  <ul class="list-group">
-    {% for table in tables %}
-      <li class="list-group-item">
-        <a href="{{ url_for('table_view', table_name=table) }}">{{ table }}</a>
-      </li>
+  <h2 class="mb-3">Таблицы</h2>
+
+  {# список скрываемых таблиц для не-админа #}
+  {% set hidden = ['users'] %}
+
+  <div class="list-group">
+    {% for t in tables %}
+      {% if is_admin or (t|lower not in hidden) %}
+        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+           href="{{ url_for('table_view', table_name=t) }}">
+          <span>{{ t }}</span>
+        </a>
+      {% endif %}
     {% endfor %}
-  </ul>
+  </div>
 {% endblock %}

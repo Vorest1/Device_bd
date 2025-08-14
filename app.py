@@ -1,13 +1,155 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
 import sqlite3
 import os
-import datetime
+import datetime as dt
 import re
-import datetime
+from flask_login import (
+    LoginManager, UserMixin, login_user, logout_user,
+    login_required, current_user
+)
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from functools import wraps
+from flask import request
+
 
 app = Flask(__name__)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'             # куда редиректить незалогиненых
+login_manager.login_message_category = 'warning'
 app.secret_key = 'your-unique-secret-key-1234567890'
 DB_PATH = os.path.join(os.path.dirname(__file__), 'db', '2lr.db')
+
+def admin_required(view):
+    @wraps(view)
+    def _wrapped(*args, **kwargs):
+        if not current_user.is_authenticated:
+            # просим войти, чтобы админ мог сразу вернуться
+            return redirect(url_for('login', next=request.url))
+        if not getattr(current_user, 'is_admin', False):
+            flash('Доступ только для администратора.', 'danger')
+            return redirect(url_for('index'))
+        return view(*args, **kwargs)
+    return _wrapped
+class User(UserMixin):
+    def __init__(self, user_id, username, email, password_hash, created_at, is_active=True, is_admin=False):
+        self.id = user_id
+        self.username = username
+        self.email = email
+        self.password_hash = password_hash
+        self.created_at = created_at
+        self.is_active_ = bool(is_active)
+        self.is_admin = bool(is_admin)
+    def is_active(self):
+        return self.is_active_
+
+def row_to_user(row):
+    if not row:
+        return None
+    # порядок колонок должен совпадать с SELECT ниже
+    return User(
+        user_id=row[0], username=row[1], email=row[2],
+        password_hash=row[3], created_at=row[4],
+        is_active=row[5], is_admin=row[6]
+    )
+
+@login_manager.user_loader
+def load_user(user_id):
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("""SELECT user_id, username, email, password_hash, created_at, is_active, is_admin
+                     FROM users WHERE user_id = ?""", (user_id,))
+        return row_to_user(c.fetchone())
+
+from datetime import datetime
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        email = (request.form.get('email') or '').strip() or None
+        password = request.form.get('password') or ''
+        if not username or not password:
+            flash('Заполните логин и пароль.', 'danger')
+            return redirect(url_for('register'))
+
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute("SELECT 1 FROM users WHERE username = ? OR (email IS NOT NULL AND email = ?)",
+                      (username, email))
+            if c.fetchone():
+                flash('Такой логин или email уже заняты.', 'danger')
+                return redirect(url_for('register'))
+            c.execute("""INSERT INTO users (username, email, password_hash, created_at)
+                         VALUES (?, ?, ?, ?)""",
+                      (username, email, generate_password_hash(password), datetime.utcnow().isoformat()))
+            conn.commit()
+            new_id = c.lastrowid
+
+        user = load_user(new_id)
+        login_user(user)
+        flash('Вы успешно зарегистрированы и вошли в систему.', 'success')
+        return redirect(url_for('profile'))
+    return render_template('register.html')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        login_val = (request.form.get('login') or '').strip()  # логин ИЛИ email
+        password = request.form.get('password') or ''
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            # в /login
+            c.execute("""SELECT user_id, username, email, password_hash, created_at, is_active, is_admin
+                         FROM users WHERE username = ? OR email = ?""", (login_val, login_val))
+            row = c.fetchone()
+        user = row_to_user(row)
+        if not user or not check_password_hash(user.password_hash, password):
+            flash('Неверные логин или пароль.', 'danger')
+            return redirect(url_for('login'))
+
+        login_user(user)
+        flash('Добро пожаловать!', 'success')
+        return redirect(request.args.get('next') or url_for('profile'))
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Вы вышли из системы.', 'info')
+    return redirect(url_for('index'))
+
+
+@app.route('/profile')
+@login_required
+def profile():
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("""
+            SELECT d.device_id, d.model, m.name AS manufacturer, c2.name AS category, d.current_price
+            FROM devices d
+            JOIN manufacturers m ON d.manufacturer_id = m.manufacturer_id
+            JOIN categories     c2 ON d.category_id = c2.category_id
+            WHERE d.created_by = ?
+            ORDER BY d.device_id DESC
+        """, (current_user.id,))
+        rows = c.fetchall()
+    devices = [{'device_id': r[0], 'model': r[1], 'manufacturer': r[2], 'category': r[3], 'current_price': r[4]} for r in rows]
+    return render_template('profile.html', user=current_user, devices=devices)
+
+@app.context_processor
+def inject_flags():
+    return {
+        'is_admin': (current_user.is_authenticated and getattr(current_user, 'is_admin', False))
+    }
+
+
+# ----------Site content------------------
+
+PROTECTED_CHILD_TABLES = {'displays','batteries','cameras','specifications','device_retailers'}
 
 REFERENCE_MAP = {
     # справочники
@@ -43,7 +185,8 @@ def value_in_use(cursor, table_name: str, pk_value: str) -> tuple[bool, str]:
 
 def safe_date(date_str, default_today=True):
     MIN_DATE = datetime.date(2016, 1, 1)
-    today = datetime.date.today()
+    from datetime import date as _Date, datetime as _DT
+    today = _Date.today()
     try:
         date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
     except Exception:
@@ -54,6 +197,14 @@ def safe_date(date_str, default_today=True):
         date = today
     return date.strftime("%Y-%m-%d")
 
+def _sort_ci_tuples(rows, idx=1):
+    """rows: [(id, name), ...] -> sorted by name (trim+casefold)."""
+    return sorted(rows, key=lambda r: (str(r[idx]).strip().casefold(), r[idx]))
+
+def _sort_ci_dicts(items, key_name='name'):
+    """items: [{'name':...}, ...] -> sorted by name (trim+casefold)."""
+    return sorted(items, key=lambda x: (str(x.get(key_name,'')).strip().casefold(),
+                                        x.get(key_name,'')))
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -212,27 +363,31 @@ def index():
 
 
 @app.route('/add_device', methods=['GET', 'POST'])
+@admin_required
 def add_device():
+    from datetime import date as _Date, datetime as _DT
     message = ""
-    today = datetime.date.today()
+    today = _Date.today()  
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         # Получаем значения для списков
-        c.execute("SELECT manufacturer_id, name FROM manufacturers ORDER BY name COLLATE NOCASE")
-        manufacturers = c.fetchall()
-        c.execute("SELECT category_id, name FROM categories ORDER BY name COLLATE NOCASE")
-        categories = c.fetchall()
+        c.execute("SELECT manufacturer_id, name FROM manufacturers")
+        manufacturers = _sort_ci_tuples(c.fetchall())
+        c.execute("SELECT category_id, name FROM categories")
+        categories = _sort_ci_tuples(c.fetchall())
         c.execute("""
             SELECT osys.os_id, osn.name, osys.latest_version
             FROM operating_systems osys
             JOIN os_name osn ON osys.os_name_id = osn.os_name_id
-            ORDER BY osn.name, osys.latest_version
         """)
-        operating_systems = c.fetchall()
-        c.execute("SELECT retailer_id, name FROM retailers ORDER BY name COLLATE NOCASE")
-        retailers = c.fetchall()
-        c.execute("SELECT color_id, name FROM color ORDER BY name COLLATE NOCASE")
-        colors = c.fetchall()
+        operating_systems = sorted(
+            c.fetchall(),
+            key=lambda r: (str(r[1]).strip().casefold(), r[2])
+        )
+        c.execute("SELECT retailer_id, name FROM retailers")
+        retailers = _sort_ci_tuples(c.fetchall())
+        c.execute("SELECT color_id, name FROM color")
+        colors = _sort_ci_tuples(c.fetchall())
 
     if request.method == 'POST':
         manufacturer_id = request.form.get('manufacturer_id')
@@ -298,9 +453,9 @@ def add_device():
             c = conn.cursor()
             # Вставляем новое устройство
             c.execute("""
-                INSERT INTO devices (manufacturer_id, category_id, os_id, model, release_date, current_price, weight_grams, color_id, is_waterproof, warranty_months)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (manufacturer_id, category_id, os_id, model, release_date, current_price, weight_grams, color_id, is_waterproof, warranty_months))
+                INSERT INTO devices (manufacturer_id, category_id, os_id, model, release_date, current_price, weight_grams, color_id, is_waterproof, warranty_months, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (manufacturer_id, category_id, os_id, model, release_date, current_price, weight_grams, color_id, is_waterproof, warranty_months, current_user.id))
             device_id = c.lastrowid
 
             # Связь device_retailer (много продавцов)
@@ -316,7 +471,7 @@ def add_device():
     # Ограничения по датам
     min_date = '1990-01-01'
     
-    today = datetime.date.today().isoformat()
+    today = _Date.today().isoformat()
     max_date = today
 
     return render_template('add_device.html',
@@ -428,15 +583,28 @@ def device_detail(device_id):
     )
 
 @app.route('/table')
+@app.route('/tables_list')
 def tables_list():
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        # Получаем имена всех таблиц в базе
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
-        tables = [row[0] for row in c.fetchall()]
+        c.execute("""
+            SELECT name
+            FROM sqlite_master
+            WHERE type='table' AND name NOT LIKE 'sqlite_%'
+            ORDER BY name
+        """)
+        tables = [r[0] for r in c.fetchall()]
+
+    # Скрываем users для всех, кроме админа
+    if not (current_user.is_authenticated and getattr(current_user, 'is_admin', False)):
+        tables = [t for t in tables if t.lower() != 'users']
+
     return render_template('table_list.html', tables=tables)
+
 @app.route('/table/<table_name>')
 def table_view(table_name):
+    if table_name.lower() == 'users' and not (current_user.is_authenticated and getattr(current_user, 'is_admin', False)):
+        return redirect(url_for('tables_list'))
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute(f"PRAGMA table_info({table_name})")
@@ -461,6 +629,7 @@ def table_view(table_name):
     )
 
 @app.route('/add/<table_name>', methods=['GET', 'POST'])
+@admin_required
 def add_row(table_name):
     next_url = request.args.get('next') or request.form.get('next_url') or ''
     embedded = request.form.get('embedded') or request.args.get('embedded')
@@ -511,7 +680,35 @@ def add_row(table_name):
     )
 
 @app.route('/delete/<table_name>/<pk>', methods=['POST'])
+@admin_required
 def delete_row(table_name, pk):
+    t = table_name.lower()
+    #Запрет: админ не может удалить самого себя
+    if t == 'users':
+        try:
+            target_id = int(pk)
+        except ValueError:
+            flash('Некорректный идентификатор пользователя.', 'danger')
+            return redirect(url_for('table_view', table_name=table_name))
+
+        if current_user.is_authenticated and int(current_user.id) == target_id:
+            flash('Нельзя удалить самого себя.', 'warning')
+            return redirect(url_for('table_view', table_name=table_name))
+
+        # (Бонус) Защита от удаления последнего администратора
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute("SELECT is_admin FROM users WHERE user_id = ?", (target_id,))
+            row = c.fetchone()
+            if row and row[0]:  # удаляемого пользователя — админ
+                c.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1")
+                admins = c.fetchone()[0] or 0
+                if admins <= 1:
+                    flash('Нельзя удалить последнего администратора.', 'warning')
+                    return redirect(url_for('table_view', table_name=table_name))
+    if t in PROTECTED_CHILD_TABLES:
+        flash('Удаление записей из этой таблицы доступно только через удаление устройства.', 'warning')
+        return redirect(url_for('table_view', table_name=table_name))
     # для устройств используем специальный каскадный роут
     if table_name == 'devices':
         return redirect(url_for('delete_device', device_id=pk))
@@ -534,6 +731,7 @@ def delete_row(table_name, pk):
 
 
 @app.route('/delete_device/<int:device_id>', methods=['POST'])
+@admin_required
 def delete_device(device_id):
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
@@ -550,8 +748,10 @@ def delete_device(device_id):
     return redirect(url_for('table_view', table_name='devices'))
 
 @app.route('/statistic', methods=['GET', 'POST'])
+@app.route('/statistic')
 def statistic():
     info_by = request.form.get('info_by') or request.args.get('info_by') or 'category'
+    is_admin = current_user.is_authenticated and getattr(current_user, 'is_admin', False)
 
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
@@ -600,9 +800,8 @@ def statistic():
             devices_without_waterproof = c.fetchone()[0] or 0
         except sqlite3.Error:
             devices_without_waterproof = 0
-        
 
-        # ---- СВОДКА ПО ТАБЛИЦАМ (для statistic.html) ----
+        # ---- СВОДКА ПО ТАБЛИЦАМ ----
         purpose_map = {
             'devices': 'главная',
             'categories': 'справочник',
@@ -621,7 +820,6 @@ def statistic():
             'specifications': 'дополнительная',
             'operating_systems': 'дополнительная',
         }
-
         rus_desc = {
             'batteries': 'Характеристики батареи',
             'cameras': 'Характеристики камер',
@@ -648,15 +846,18 @@ def statistic():
             ORDER BY name
         """)
         table_names = [r[0] for r in c.fetchall()]
+        # Скрываем users для всех, кроме админа
+        if not is_admin:
+            table_names = [t for t in table_names if t.lower() != 'users']
 
         tables_info = []
         for name in table_names:
             try:
-                c.execute(f"SELECT COUNT(*) FROM {name}")
+                c.execute(f'SELECT COUNT(*) FROM "{name}"')
                 rows = c.fetchone()[0] or 0
             except Exception:
                 rows = 0
-            c.execute(f"PRAGMA table_info({name})")
+            c.execute(f'PRAGMA table_info("{name}")')
             cols = len(c.fetchall())
             tables_info.append({
                 'name': name,
@@ -669,11 +870,8 @@ def statistic():
         order = {'главная': 0, 'справочник': 1, 'дополнительная': 2}
         tables_info.sort(key=lambda x: (order.get(x['purpose'], 99), x['name']))
 
-
         # ---- ГРУППИРОВКИ (без нулевых групп) ----
-        # Формат: (name, devices_count, in_stock_devices, min_price, avg_price, max_price)
-
-        # Категории: считаем по устройствам; "в наличии" — если есть хотя бы один оффер in_stock=1
+        # Категории
         c.execute("""
             WITH dr_any AS (
               SELECT device_id, MAX(in_stock) AS in_stock_any
@@ -725,7 +923,7 @@ def statistic():
             for r in c.fetchall()
         ]
 
-        # Страны — через производителей, без нулевых
+        # Страны
         c.execute("""
             WITH dr_any AS (
               SELECT device_id, MAX(in_stock) AS in_stock_any
@@ -752,7 +950,7 @@ def statistic():
             for r in c.fetchall()
         ]
 
-        # Продавцы — уникальные устройства у продавца; "в наличии" у этого продавца; только не нулевые
+        # Продавцы
         c.execute("""
             SELECT r.name,
                    COUNT(DISTINCT dr.device_id)                                  AS devices_count,
@@ -772,7 +970,7 @@ def statistic():
             for r in c.fetchall()
         ]
 
-        # ---- Какая группировка активна сейчас
+        # Какая группировка активна
         if info_by == 'manufacturer':
             info_results = manufacturers_stat
         elif info_by == 'retailer':
@@ -783,7 +981,7 @@ def statistic():
             info_by = 'category'
             info_results = categories_stat
 
-        # ---- Данные для графика ценовой динамики (4 категории, цены отсортированы по убыванию) ----
+        # ---- Данные для графика ценовой динамики (4 топ-категории) ----
         c.execute("""
             SELECT c.category_id, c.name, COUNT(d.device_id) AS cnt
             FROM categories c
@@ -794,7 +992,7 @@ def statistic():
         """)
         top4 = c.fetchall()
 
-        price_lines = []   # [{ 'name': str, 'prices': [int, ...] }, ...]
+        price_lines = []         # [{ 'name': str, 'prices': [int, ...] }, ...]
         max_series_len = 0
         max_series_price = 0
 
@@ -803,48 +1001,17 @@ def statistic():
                 SELECT current_price
                 FROM devices
                 WHERE category_id = ? AND current_price IS NOT NULL
-                ORDER BY current_price DESC
+                ORDER BY current_price ASC   -- упорядочим по возрастанию
             """, (cat_id,))
-            prices = [int(row[0]) for row in c.fetchall()]
-            # ограничим точки для читаемости, например 60
-            prices = prices[:60]
+            prices = [int(row[0]) for row in c.fetchall()][:60]  # не более 60 точек
             if prices:
                 price_lines.append({'name': cat_name, 'prices': prices})
                 if len(prices) > max_series_len:
                     max_series_len = len(prices)
-                if max(prices) > max_series_price:
-                    max_series_price = max(prices)
-    
-    c.execute("""
-        SELECT c.category_id, c.name, COUNT(d.device_id) AS cnt
-        FROM categories c
-        JOIN devices d ON d.category_id = c.category_id AND d.current_price IS NOT NULL
-        GROUP BY c.category_id, c.name
-        ORDER BY cnt DESC, c.name
-        LIMIT 4
-    """)
-    top4 = c.fetchall()
+                mp = max(prices)
+                if mp > max_series_price:
+                    max_series_price = mp
 
-    price_lines = []
-    max_series_len = 0
-    max_series_price = 0
-
-    for cat_id, cat_name, _ in top4:
-        c.execute("""
-            SELECT current_price
-            FROM devices
-            WHERE category_id = ? AND current_price IS NOT NULL
-            ORDER BY current_price ASC   -- было DESC, теперь ASC
-        """, (cat_id,))
-        prices = [int(row[0]) for row in c.fetchall()]
-        prices = prices[:60]  # ограничим точки для читаемости
-        if prices:
-            price_lines.append({'name': cat_name, 'prices': prices})
-            if len(prices) > max_series_len:
-                max_series_len = len(prices)
-            mp = max(prices)
-            if mp > max_series_price:
-                max_series_price = mp
     return render_template(
         'statistic.html',
         info_by=info_by,
@@ -853,9 +1020,7 @@ def statistic():
         cheapest=cheapest, expensive=expensive,
         devices_without_specs=devices_without_specs,
         devices_without_waterproof=devices_without_waterproof,
-        # данные для мини-графика категорий (можно оставить, если используете)
         top_cat=[(r[0], r[1]) for r in categories_stat[:5]],
-        # данные для нового многосерийного графика
         price_lines=price_lines,
         price_lines_max_x=max_series_len if max_series_len else 1,
         price_lines_max_y=max_series_price if max_series_price else 1,
@@ -880,18 +1045,16 @@ def search():
             SELECT DISTINCT m.manufacturer_id, m.name
             FROM manufacturers m
             JOIN devices d ON d.manufacturer_id = m.manufacturer_id
-            ORDER BY m.name
         """)
-        manufacturers = c.fetchall()
+        manufacturers = _sort_ci_tuples(c.fetchall())
 
         c.execute("""
             SELECT DISTINCT co.country_id, co.name
             FROM country co
             JOIN manufacturers m ON m.country_id = co.country_id
             JOIN devices d ON d.manufacturer_id = m.manufacturer_id
-            ORDER BY co.name
         """)
-        countries = c.fetchall()
+        countries = _sort_ci_tuples(c.fetchall())
 
         # Общий SELECT, совпадающий с колонками вашей таблицы результатов
         base_select = '''
@@ -991,11 +1154,12 @@ def api_attribute_values():
         else:
             query += f"AND d.{other_id_field} = ? "
         params.append(other_val)
-    query += f"ORDER BY t.{name_field}"
+
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute(query, params)
         data = [{'id': row[0], 'name': row[1]} for row in c.fetchall()]
+        data = _sort_ci_dicts(data, 'name')
     return jsonify(data)
 
 @app.route('/api/category_price_range')
@@ -1072,6 +1236,7 @@ def api_filter_options():
             params.append(category_id)
         c.execute(q, params)
         manufacturers = [{'manufacturer_id': row[0], 'name': row[1]} for row in c.fetchall()]
+        manufacturers = _sort_ci_dicts(manufacturers, 'name')
         # Цвета
         q = """
             SELECT DISTINCT col.color_id, col.name
@@ -1088,10 +1253,12 @@ def api_filter_options():
             params.append(manufacturer_id)
         c.execute(q, params)
         colors = [{'color_id': row[0], 'name': row[1]} for row in c.fetchall()]
+        colors = _sort_ci_dicts(colors, 'name')
     return jsonify({'manufacturers': manufacturers, 'colors': colors})
 
 
 @app.route('/add_manufacturer', methods=['GET', 'POST'])
+@admin_required
 def add_manufacturer():
     next_url = request.args.get('next')
     message = ""
@@ -1120,11 +1287,12 @@ def add_manufacturer():
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         # страны для выпадающего списка
-        c.execute("SELECT country_id, name FROM country ORDER BY name COLLATE NOCASE")
-        countries = c.fetchall()
+        c.execute("SELECT country_id, name FROM country")
+        countries = _sort_ci_tuples(c.fetchall())
     return render_template('add_manufacturer.html', countries=countries, message=message, next_url=next_url)
 
 @app.route('/add_category', methods=['GET', 'POST'])
+@admin_required
 def add_category():
     next_url = request.args.get('next')
     if request.method == 'POST':
@@ -1143,13 +1311,15 @@ def add_category():
     return render_template('add_category.html', next_url=next_url)
 
 @app.route('/add_os', methods=['GET', 'POST'])
+@admin_required
 def add_os():
-    today = datetime.date.today().isoformat()
+    from datetime import date as _Date, datetime as _DT
+    today = _Date.today().isoformat()
     next_url = request.args.get('next')
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        c.execute("SELECT os_name_id, name FROM os_name ORDER BY name COLLATE NOCASE")
-        os_names = c.fetchall()
+        c.execute("SELECT os_name_id, name FROM os_name")
+        os_names = _sort_ci_tuples(c.fetchall())
     if request.method == 'POST':
         os_name_id = request.form.get('os_name_id')
         developer = request.form.get('developer')
@@ -1170,6 +1340,7 @@ def add_os():
     return render_template('add_os.html', os_names=os_names, today=today, next_url=next_url)
 
 @app.route('/add_retailer', methods=['GET', 'POST'])
+@admin_required
 def add_retailer():
     next_url = request.args.get('next')
     if request.method == 'POST':
@@ -1197,24 +1368,33 @@ def add_retailer():
     return render_template('add_retailer.html', next_url=next_url)
 
 @app.route('/device/<int:device_id>/extras', methods=['GET', 'POST'])
+@admin_required
 def edit_extras(device_id):
+    # Локальный импорт, чтобы исключить любые затенения имён.
+    from datetime import date as _Date, datetime as _DT
     embedded_flag = request.args.get('embedded') or request.form.get('embedded')
+    # Для полей даты на вкладке «Продавцы»
+    today = _Date.today().isoformat()
 
     def back_to_extras():
         if embedded_flag:
             return redirect(url_for('edit_extras', device_id=device_id, embedded=1))
         return redirect(url_for('edit_extras', device_id=device_id))
 
+    # ---------- Загрузка данных для всех вкладок ----------
     with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
         c = conn.cursor()
-        # Для выпадающих списков
-        c.execute("SELECT proc_model_id, name FROM proc_model ORDER BY name COLLATE NOCASE")
-        proc_models = c.fetchall()
-        c.execute("SELECT storage_type_id, name FROM storage_type ORDER BY name COLLATE NOCASE")
-        storage_types = c.fetchall()
-        c.execute("SELECT techn_matr_id, name FROM techn_matr ORDER BY name COLLATE NOCASE")
-        techn_matrices = c.fetchall()
-        # Текущие значения
+
+        # Справочники для выпадающих списков
+        c.execute("SELECT proc_model_id, name FROM proc_model")
+        proc_models = _sort_ci_tuples(c.fetchall())
+        c.execute("SELECT storage_type_id, name FROM storage_type")
+        storage_types = _sort_ci_tuples(c.fetchall())
+        c.execute("SELECT techn_matr_id, name FROM techn_matr")
+        techn_matrices = _sort_ci_tuples(c.fetchall())
+
+        # Текущие значения характеристик
         c.execute("SELECT * FROM specifications WHERE device_id=?", (device_id,))
         spec = c.fetchone()
         c.execute("SELECT * FROM displays WHERE device_id=?", (device_id,))
@@ -1224,61 +1404,81 @@ def edit_extras(device_id):
         c.execute("SELECT * FROM batteries WHERE device_id=?", (device_id,))
         battery = c.fetchone()
 
+        # --- данные для вкладки «Продавцы» ---
+        # Справочник продавцов (отсортирован по-людски)
+        c.execute("SELECT retailer_id, name FROM retailers")
+        retailers = _sort_ci_tuples(c.fetchall())
+
+        # Текущие предложения по устройству — сортируем по имени продавца
+        c.execute("""
+            SELECT dr.device_retailer_id, dr.retailer_id, r.name, dr.price, dr.in_stock, dr.last_updated
+            FROM device_retailers dr
+            JOIN retailers r ON r.retailer_id = dr.retailer_id
+            WHERE dr.device_id=?
+            ORDER BY r.name COLLATE NOCASE
+        """, (device_id,))
+        offers = c.fetchall()
+
+    # ---------- Обработка POST ----------
     if request.method == 'POST':
         tab = request.form.get('tab')
+
         # SPECIFICATION
         if tab == 'specification':
             data = {}
             proc_model_id = request.form.get('proc_model_id')
-            if proc_model_id: data['proc_model_id'] = proc_model_id
+            if proc_model_id:
+                data['proc_model_id'] = proc_model_id
+
             processor_cores = request.form.get('processor_cores')
             if processor_cores:
                 try:
-                    processor_cores = int(processor_cores)
-                    if not (1 <= processor_cores <= 20): raise ValueError
-                    data['processor_cores'] = processor_cores
+                    v = int(processor_cores)
+                    if not (1 <= v <= 20): raise ValueError
+                    data['processor_cores'] = v
                 except:
-                    flash('Ядер: 1-20', 'danger')
-                    return back_to_extras()
+                    flash('Ядер: 1-20', 'danger'); return back_to_extras()
+
             ram_gb = request.form.get('ram_gb')
             if ram_gb:
                 try:
-                    ram_gb = int(ram_gb)
-                    if not (1 <= ram_gb <= 32): raise ValueError
-                    data['ram_gb'] = ram_gb
+                    v = int(ram_gb)
+                    if not (1 <= v <= 32): raise ValueError
+                    data['ram_gb'] = v
                 except:
-                    flash('RAM: 1-32', 'danger')
-                    return back_to_extras()
+                    flash('RAM: 1-32', 'danger'); return back_to_extras()
+
             storage_gb = request.form.get('storage_gb')
             if storage_gb:
                 try:
-                    storage_gb = int(storage_gb)
-                    if not (1 <= storage_gb <= 2048): raise ValueError
-                    data['storage_gb'] = storage_gb
+                    v = int(storage_gb)
+                    if not (1 <= v <= 2048): raise ValueError
+                    data['storage_gb'] = v
                 except:
-                    flash('Память: 1-2048', 'danger')
-                    return back_to_extras()
+                    flash('Память: 1-2048', 'danger'); return back_to_extras()
+
             storage_type_id = request.form.get('storage_type_id')
-            if storage_type_id: data['storage_type_id'] = storage_type_id
+            if storage_type_id:
+                data['storage_type_id'] = storage_type_id
 
             if data:
                 with sqlite3.connect(DB_PATH) as conn:
+                    conn.execute("PRAGMA foreign_keys = ON")
                     c = conn.cursor()
                     c.execute("SELECT spec_id FROM specifications WHERE device_id=?", (device_id,))
                     exists = c.fetchone()
                     if exists:
-                        # UPDATE только указанные поля
                         fields = ", ".join([f"{k}=?" for k in data])
                         values = list(data.values()) + [device_id]
                         c.execute(f"UPDATE specifications SET {fields} WHERE device_id=?", values)
                     else:
-                        # INSERT только указанные
                         fields = ", ".join(['device_id'] + list(data.keys()))
-                        vals = ", ".join(['?'] * (len(data) + 1))
+                        qs = ", ".join(['?'] * (len(data) + 1))
                         values = [device_id] + list(data.values())
-                        c.execute(f"INSERT INTO specifications ({fields}) VALUES ({vals})", values)
+                        c.execute(f"INSERT INTO specifications ({fields}) VALUES ({qs})", values)
                     conn.commit()
                 flash("Спецификация обновлена", "success")
+
         # DISPLAY
         elif tab == 'display':
             data = {}
@@ -1289,60 +1489,52 @@ def edit_extras(device_id):
             refresh_rate_hz = request.form.get('refresh_rate_hz')
 
             if not (diagonal_inches and resolution and techn_matr_id and refresh_rate_hz and brightness_nits):
-                flash('Заполните все поля для вкладки "Дисплей".', 'danger')
-                return back_to_extras()
+                flash('Заполните все поля для вкладки "Дисплей".', 'danger'); return back_to_extras()
 
-            if diagonal_inches:
-                try:
-                    diagonal_inches = float(diagonal_inches)
-                    if not (1.0 <= diagonal_inches <= 100.0): raise ValueError
-                    data['diagonal_inches'] = diagonal_inches
-                except:
-                    flash('Диагональ: 1.0-100.0', 'danger')
-                    return back_to_extras()
-            
-            if resolution:
-                if not (7 <= len(resolution) <= 9):
-                    flash('Разрешение: 7-9 символов', 'danger')
-                    return back_to_extras()
-                data['resolution'] = resolution
-            
-            if techn_matr_id: data['techn_matr_id'] = techn_matr_id
-            
-            if refresh_rate_hz:
-                try:
-                    refresh_rate_hz = int(refresh_rate_hz)
-                    if not (1 <= refresh_rate_hz <= 360): raise ValueError
-                    data['refresh_rate_hz'] = refresh_rate_hz
-                except:
-                    flash('Частота: 1-360', 'danger')
-                    return back_to_extras()
+            try:
+                v = float(diagonal_inches)
+                if not (1.0 <= v <= 100.0): raise ValueError
+                data['diagonal_inches'] = v
+            except:
+                flash('Диагональ: 1.0-100.0', 'danger'); return back_to_extras()
 
-            if brightness_nits:
-                try:
-                    brightness_nits = int(brightness_nits)
-                    if not (1 <= brightness_nits <= 10000): raise ValueError
-                    data['brightness_nits'] = brightness_nits
-                except:
-                    flash('Яркость: 1-10000', 'danger')
-                    return back_to_extras()
+            if not (7 <= len(resolution) <= 9):
+                flash('Разрешение: 7-9 символов', 'danger'); return back_to_extras()
+            data['resolution'] = resolution
 
-            if data:
-                with sqlite3.connect(DB_PATH) as conn:
-                    c = conn.cursor()
-                    c.execute("SELECT display_id FROM displays WHERE device_id=?", (device_id,))
-                    exists = c.fetchone()
-                    if exists:
-                        fields = ", ".join([f"{k}=?" for k in data])
-                        values = list(data.values()) + [device_id]
-                        c.execute(f"UPDATE displays SET {fields} WHERE device_id=?", values)
-                    else:
-                        fields = ", ".join(['device_id'] + list(data.keys()))
-                        vals = ", ".join(['?'] * (len(data) + 1))
-                        values = [device_id] + list(data.values())
-                        c.execute(f"INSERT INTO displays ({fields}) VALUES ({vals})", values)
-                    conn.commit()
-                flash("Дисплей обновлён", "success")
+            data['techn_matr_id'] = techn_matr_id
+
+            try:
+                v = int(refresh_rate_hz)
+                if not (1 <= v <= 360): raise ValueError
+                data['refresh_rate_hz'] = v
+            except:
+                flash('Частота: 1-360', 'danger'); return back_to_extras()
+
+            try:
+                v = int(brightness_nits)
+                if not (1 <= v <= 10000): raise ValueError
+                data['brightness_nits'] = v
+            except:
+                flash('Яркость: 1-10000', 'danger'); return back_to_extras()
+
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
+                c = conn.cursor()
+                c.execute("SELECT display_id FROM displays WHERE device_id=?", (device_id,))
+                exists = c.fetchone()
+                if exists:
+                    fields = ", ".join([f"{k}=?" for k in data])
+                    values = list(data.values()) + [device_id]
+                    c.execute(f"UPDATE displays SET {fields} WHERE device_id=?", values)
+                else:
+                    fields = ", ".join(['device_id'] + list(data.keys()))
+                    qs = ", ".join(['?'] * (len(data) + 1))
+                    values = [device_id] + list(data.values())
+                    c.execute(f"INSERT INTO displays ({fields}) VALUES ({qs})", values)
+                conn.commit()
+            flash("Дисплей обновлён", "success")
+
         # CAMERA
         elif tab == 'camera':
             data = {}
@@ -1350,117 +1542,172 @@ def edit_extras(device_id):
             aperture_main = request.form.get('aperture_main')
             optical_zoom_x = request.form.get('optical_zoom_x')
             video_resolution = request.form.get('video_resolution')
-            has_ai_enhance = 1 if request.form.get('has_ai_enhance') else 0
-            data['has_ai_enhance'] = has_ai_enhance
+            data['has_ai_enhance'] = 1 if request.form.get('has_ai_enhance') else 0
 
             if not (megapixels_main and aperture_main and optical_zoom_x and video_resolution):
-                flash('Заполните все поля для вкладки "Камера".', 'danger')
-                return back_to_extras()
-            
-            if megapixels_main:
-                try:
-                    megapixels_main = float(megapixels_main)
-                    if not (2.0 <= megapixels_main <= 33.0): raise ValueError
-                    data['megapixels_main'] = megapixels_main
-                except:
-                    flash('Мпикс: 2.0-33.0', 'danger')
-                    return back_to_extras()
+                flash('Заполните все поля для вкладки "Камера".', 'danger'); return back_to_extras()
 
-            if aperture_main:
-                if not (3 <= len(aperture_main) <= 4):
-                    flash('Диафрагма: 3-4 символа', 'danger')
-                    return back_to_extras()
-                data['aperture_main'] = aperture_main
+            try:
+                v = float(megapixels_main)
+                if not (2.0 <= v <= 33.0): raise ValueError
+                data['megapixels_main'] = v
+            except:
+                flash('Мпикс: 2.0-33.0', 'danger'); return back_to_extras()
 
-            if optical_zoom_x:
-                try:
-                    optical_zoom_x = float(optical_zoom_x)
-                    if not (0.0 <= optical_zoom_x <= 144.0): raise ValueError
-                    data['optical_zoom_x'] = optical_zoom_x
-                except:
-                    flash('Зум: 0.0-144.0', 'danger')
-                    return back_to_extras()
+            if not (3 <= len(aperture_main) <= 4):
+                flash('Диафрагма: 3-4 символа', 'danger'); return back_to_extras()
+            data['aperture_main'] = aperture_main
 
-            if video_resolution:
-                if not (7 <= len(video_resolution) <= 9):
-                    flash('Видео: 7-9 символов', 'danger')
-                    return back_to_extras()
-                data['video_resolution'] = video_resolution
+            try:
+                v = float(optical_zoom_x)
+                if not (0.0 <= v <= 144.0): raise ValueError
+                data['optical_zoom_x'] = v
+            except:
+                flash('Зум: 0.0-144.0', 'danger'); return back_to_extras()
 
-            if data:
-                with sqlite3.connect(DB_PATH) as conn:
-                    c = conn.cursor()
-                    c.execute("SELECT camera_id FROM cameras WHERE device_id=?", (device_id,))
-                    exists = c.fetchone()
-                    if exists:
-                        fields = ", ".join([f"{k}=?" for k in data])
-                        values = list(data.values()) + [device_id]
-                        c.execute(f"UPDATE cameras SET {fields} WHERE device_id=?", values)
-                    else:
-                        fields = ", ".join(['device_id'] + list(data.keys()))
-                        vals = ", ".join(['?'] * (len(data) + 1))
-                        values = [device_id] + list(data.values())
-                        c.execute(f"INSERT INTO cameras ({fields}) VALUES ({vals})", values)
-                    conn.commit()
-                flash("Камера обновлена", "success")
+            if not (7 <= len(video_resolution) <= 9):
+                flash('Видео: 7-9 символов', 'danger'); return back_to_extras()
+            data['video_resolution'] = video_resolution
+
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
+                c = conn.cursor()
+                c.execute("SELECT camera_id FROM cameras WHERE device_id=?", (device_id,))
+                exists = c.fetchone()
+                if exists:
+                    fields = ", ".join([f"{k}=?" for k in data])
+                    values = list(data.values()) + [device_id]
+                    c.execute(f"UPDATE cameras SET {fields} WHERE device_id=?", values)
+                else:
+                    fields = ", ".join(['device_id'] + list(data.keys()))
+                    qs = ", ".join(['?'] * (len(data) + 1))
+                    values = [device_id] + list(data.values())
+                    c.execute(f"INSERT INTO cameras ({fields}) VALUES ({qs})", values)
+                conn.commit()
+            flash("Камера обновлена", "success")
+
         # BATTERY
         elif tab == 'battery':
             data = {}
             capacity_mah = request.form.get('capacity_mah')
             fast_charging_w = request.form.get('fast_charging_w')
-            wireless_charging = 1 if request.form.get('wireless_charging') else 0
-            data['wireless_charging'] = wireless_charging
             estimated_life_hours = request.form.get('estimated_life_hours')
+            data['wireless_charging'] = 1 if request.form.get('wireless_charging') else 0
 
             if not (capacity_mah and fast_charging_w and estimated_life_hours):
-                flash('Заполните все поля для вкладки "Батарея".', 'danger')
+                flash('Заполните все поля для вкладки "Батарея".', 'danger'); return back_to_extras()
+
+            try:
+                v = int(capacity_mah)
+                if not (1 <= v <= 20000): raise ValueError
+                data['capacity_mah'] = v
+            except:
+                flash('Ёмкость: 1-20000', 'danger'); return back_to_extras()
+
+            try:
+                v = float(fast_charging_w)
+                if not (0.0 <= v <= 20.0): raise ValueError
+                data['fast_charging_w'] = v
+            except:
+                flash('Быстрая зарядка: 0.0-20.0', 'danger'); return back_to_extras()
+
+            try:
+                v = float(estimated_life_hours)
+                if not (0.0 <= v <= 96.0): raise ValueError
+                data['estimated_life_hours'] = v
+            except:
+                flash('Время работы: 0.0-96.0', 'danger'); return back_to_extras()
+
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
+                c = conn.cursor()
+                c.execute("SELECT battery_id FROM batteries WHERE device_id=?", (device_id,))
+                exists = c.fetchone()
+                if exists:
+                    fields = ", ".join([f"{k}=?" for k in data])
+                    values = list(data.values()) + [device_id]
+                    c.execute(f"UPDATE batteries SET {fields} WHERE device_id=?", values)
+                else:
+                    fields = ", ".join(['device_id'] + list(data.keys()))
+                    qs = ", ".join(['?'] * (len(data) + 1))
+                    values = [device_id] + list(data.values())
+                    c.execute(f"INSERT INTO batteries ({fields}) VALUES ({qs})", values)
+                conn.commit()
+            flash("Батарея обновлена", "success")
+
+        # OFFERS (продавцы)
+        elif tab == 'offers':
+            action = request.form.get('action') or 'add_offer'
+
+            if action == 'add_offer':
+                retailer_id  = request.form.get('retailer_id')
+                site_price   = request.form.get('site_price')
+                in_stock     = 1 if request.form.get('in_stock') == 'on' else 0
+                last_updated = request.form.get('last_updated') or today  # YYYY-MM-DD
+
+                if not retailer_id or not site_price:
+                    flash('Укажите продавца и цену.', 'danger'); return back_to_extras()
+                try:
+                    site_price = float(site_price)
+                    if not (0.0 <= site_price <= 1_000_000.0): raise ValueError
+                    if not ("2016-01-01" <= last_updated <= today): raise ValueError
+                except:
+                    flash('Проверьте цену (0–1 000 000) и дату (2016-01-01…сегодня).', 'danger'); return back_to_extras()
+
+                # Для БД — формат YYYY.MM.DD (как в add_device)
+                if last_updated:
+                    last_updated_db = _DT.strptime(last_updated, "%Y-%m-%d").strftime("%Y-%m-%d")
+                else:
+                    last_updated_db = today
+
+                with sqlite3.connect(DB_PATH) as conn:
+                    conn.execute("PRAGMA foreign_keys = ON")
+                    c = conn.cursor()
+                    # Если у этого устройства уже есть такой продавец — обновим запись
+                    c.execute("""SELECT device_retailer_id
+                                 FROM device_retailers
+                                 WHERE device_id=? AND retailer_id=?""", (device_id, retailer_id))
+                    row = c.fetchone()
+                    if row:
+                        c.execute("""UPDATE device_retailers
+                                    SET price=?, in_stock=?, last_updated=?
+                                    WHERE device_retailer_id=?""",
+                                  (site_price, in_stock, last_updated_db, row[0]))
+                        msg = 'Предложение обновлено.'
+                    else:
+                        c.execute("""INSERT INTO device_retailers
+                                    (device_id, retailer_id, price, in_stock, last_updated)
+                                    VALUES (?, ?, ?, ?, ?)""",
+                                  (device_id, retailer_id, site_price, in_stock, last_updated_db))
+                        msg = 'Продавец добавлен для устройства.'
+                    conn.commit()
+                flash(msg, 'success')
                 return back_to_extras()
 
-            if capacity_mah:
+            elif action == 'del_offer':
+                dr_id = request.form.get('device_retailer_id')
+                if not dr_id:
+                    flash('Не передан идентификатор предложения.', 'danger'); return back_to_extras()
                 try:
-                    capacity_mah = int(capacity_mah)
-                    if not (1 <= capacity_mah <= 20000): raise ValueError
-                    data['capacity_mah'] = capacity_mah
+                    dr_id = int(dr_id)
                 except:
-                    flash('Ёмкость: 1-20000', 'danger')
-                    return back_to_extras()
-            
-            if fast_charging_w:
-                try:
-                    fast_charging_w = float(fast_charging_w)
-                    if not (0.0 <= fast_charging_w <= 20.0): raise ValueError
-                    data['fast_charging_w'] = fast_charging_w
-                except:
-                    flash('Быстрая зарядка: 0.0-20.0', 'danger')
-                    return back_to_extras()
-            
-            if estimated_life_hours:
-                try:
-                    estimated_life_hours = float(estimated_life_hours)
-                    if not (0.0 <= estimated_life_hours <= 96.0): raise ValueError
-                    data['estimated_life_hours'] = estimated_life_hours
-                except:
-                    flash('Время работы: 0.0-96.0', 'danger')
-                    return back_to_extras()
+                    flash('Некорректный идентификатор предложения.', 'danger'); return back_to_extras()
 
-            if data:
                 with sqlite3.connect(DB_PATH) as conn:
+                    conn.execute("PRAGMA foreign_keys = ON")
                     c = conn.cursor()
-                    c.execute("SELECT battery_id FROM batteries WHERE device_id=?", (device_id,))
-                    exists = c.fetchone()
-                    if exists:
-                        fields = ", ".join([f"{k}=?" for k in data])
-                        values = list(data.values()) + [device_id]
-                        c.execute(f"UPDATE batteries SET {fields} WHERE device_id=?", values)
-                    else:
-                        fields = ", ".join(['device_id'] + list(data.keys()))
-                        vals = ", ".join(['?'] * (len(data) + 1))
-                        values = [device_id] + list(data.values())
-                        c.execute(f"INSERT INTO batteries ({fields}) VALUES ({vals})", values)
+                    c.execute("DELETE FROM device_retailers WHERE device_retailer_id=? AND device_id=?", (dr_id, device_id))
                     conn.commit()
-                flash("Батарея обновлена", "success")
+                    if c.rowcount and c.rowcount > 0:
+                        flash('Предложение удалено.', 'success')
+                    else:
+                        flash('Предложение не найдено (возможно, уже удалено).', 'warning')
+                return back_to_extras()
+
+        # Фолбэк
         return back_to_extras()
 
+    # ---------- Рендер ----------
     return render_template('edit_extras.html',
         device_id=device_id,
         proc_models=proc_models,
@@ -1469,7 +1716,10 @@ def edit_extras(device_id):
         spec=spec,
         display=display,
         camera=camera,
-        battery=battery
+        battery=battery,
+        retailers=retailers,
+        offers=offers,
+        today=today
     )
 
 if __name__ == '__main__':

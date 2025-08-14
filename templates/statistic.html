@@ -8,8 +8,10 @@
   .mini-bar .track { height: .75rem; background: rgba(0,0,0,.08); border-radius: .5rem; overflow: hidden; }
   .mini-bar .bar { height: 100%; background: rgba(13,110,253,.7); }
   .section-title { margin: 1.2rem 0 .6rem; }
-  stat-info { scroll-margin-top: 72px; }
+  #stat-info { scroll-margin-top: 72px; }
 </style>
+
+{% set admin = (is_admin if (is_admin is defined) else (current_user.is_authenticated and current_user.is_admin)) %}
 
 <h2 class="mb-2">Статистика</h2>
 <p class="text-muted">Сведения о БД — на главной. Здесь аналитика и группировки по ключевым признакам.</p>
@@ -93,6 +95,7 @@
     </div>
   </div>
 </div>
+
 <!-- ГРАФИК ЦЕНОВОЙ ДИНАМИКИ: полная ширина -->
 <div class="row g-3 mb-3">
   <div class="col-12">
@@ -180,7 +183,7 @@
   </div>
 </div>
 
-<!-- Таблицы базы данных (перенесено с главной) -->
+<!-- Таблицы базы данных -->
 <div class="card shadow-sm mb-4">
   <div class="card-body">
     <h5 class="card-title mb-3">Таблицы базы данных</h5>
@@ -197,13 +200,15 @@
         </thead>
         <tbody>
           {% for t in tables_info %}
-            <tr>
-              <td class="text-nowrap">{{ t.name }}</td>
-              <td class="text-start">{{ t.rus }}</td>
-              <td>{{ t.rows }}</td>
-              <td>{{ t.columns }}</td>
-              <td class="text-nowrap">{{ t.purpose }}</td>
-            </tr>
+            {% if admin or t.name|lower != 'users' %}
+              <tr>
+                <td class="text-nowrap">{{ t.name }}</td>
+                <td class="text-start">{{ t.rus }}</td>
+                <td>{{ t.rows }}</td>
+                <td>{{ t.columns }}</td>
+                <td class="text-nowrap">{{ t.purpose }}</td>
+              </tr>
+            {% endif %}
           {% endfor %}
         </tbody>
       </table>
@@ -220,63 +225,63 @@
 <section id="stat-info">
   <h5 class="section-title">Справка (группировки)</h5>
   <form method="POST" action="{{ url_for('statistic') }}#stat-info" class="row g-3 mb-2">
-  <div class="col-md-6">
-    <label class="form-label">Группировать по:</label>
-    <select class="form-select" name="info_by">
-      <option value="category"     {% if info_by == 'category' %}selected{% endif %}>Категории</option>
-      <option value="manufacturer" {% if info_by == 'manufacturer' %}selected{% endif %}>Производителю</option>
-      <option value="retailer"     {% if info_by == 'retailer' %}selected{% endif %}>Продавцу</option>
-      <option value="country"      {% if info_by == 'country' %}selected{% endif %}>Стране</option>
-    </select>
-  </div>
-  <div class="col-md-12 d-flex justify-content-end">
-    <button type="submit" class="btn btn-info">Показать</button>
-  </div>
-</form>
+    <div class="col-md-6">
+      <label class="form-label">Группировать по:</label>
+      <select class="form-select" name="info_by">
+        <option value="category"     {% if info_by == 'category' %}selected{% endif %}>Категории</option>
+        <option value="manufacturer" {% if info_by == 'manufacturer' %}selected{% endif %}>Производителю</option>
+        <option value="retailer"     {% if info_by == 'retailer' %}selected{% endif %}>Продавцу</option>
+        <option value="country"      {% if info_by == 'country' %}selected{% endif %}>Стране</option>
+      </select>
+    </div>
+    <div class="col-md-12 d-flex justify-content-end">
+      <button type="submit" class="btn btn-info">Показать</button>
+    </div>
+  </form>
 
-{% if info_results %}
-  {% set name_col =
-      'Категория' if info_by == 'category'
-      else ('Производитель' if info_by == 'manufacturer'
-      else ('Продавец' if info_by == 'retailer'
-      else 'Страна')) %}
-  {% set instock_label = 'Предложений в наличии' if info_by == 'retailer' else 'В наличии' %}
+  {% if info_results %}
+    {% set name_col =
+        'Категория' if info_by == 'category'
+        else ('Производитель' if info_by == 'manufacturer'
+        else ('Продавец' if info_by == 'retailer'
+        else 'Страна')) %}
+    {% set instock_label = 'Предложений в наличии' if info_by == 'retailer' else 'В наличии' %}
 
-  <div class="table-responsive">
-    <table class="table table-bordered table-sm w-auto align-middle text-center">
-      <thead>
-        <tr>
-          <th>{{ name_col }}</th>
-          <th>Устройств</th>
-          <th>{{ instock_label }}</th>
-          <th>Мин. цена</th>
-          <th>Средн. цена</th>
-          <th>Макс. цена</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% set max_val = (info_results|map(attribute=1)|list|max) if info_results else 1 %}
-        {% for row in info_results %}
+    <div class="table-responsive">
+      <table class="table table-bordered table-sm w-auto align-middle text-center">
+        <thead>
           <tr>
-            <td class="text-start text-nowrap">{{ row[0] }}</td>
-            <td>
-              {{ row[1] }}
-              <div class="mini-bar" style="grid-template-columns: 1fr;">
-                <div class="track"><div class="bar" style="width: {{ (row[1] * 100 // (max_val if max_val>0 else 1)) }}%;"></div></div>
-              </div>
-            </td>
-            <td>{{ row[2] }}</td>
-            <td>{{ row[3] }}</td>
-            <td>{{ row[4] }}</td>
-            <td>{{ row[5] }}</td>
+            <th>{{ name_col }}</th>
+            <th>Устройств</th>
+            <th>{{ instock_label }}</th>
+            <th>Мин. цена</th>
+            <th>Средн. цена</th>
+            <th>Макс. цена</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-{% else %}
-  <div class="alert alert-info">Выберите параметр и нажмите «Показать».</div>
-{% endif %}
+        </thead>
+        <tbody>
+          {% set max_val = (info_results|map(attribute=1)|list|max) if info_results else 1 %}
+          {% for row in info_results %}
+            <tr>
+              <td class="text-start text-nowrap">{{ row[0] }}</td>
+              <td>
+                {{ row[1] }}
+                <div class="mini-bar" style="grid-template-columns: 1fr;">
+                  <div class="track"><div class="bar" style="width: {{ (row[1] * 100 // (max_val if max_val>0 else 1)) }}%;"></div></div>
+                </div>
+              </td>
+              <td>{{ row[2] }}</td>
+              <td>{{ row[3] }}</td>
+              <td>{{ row[4] }}</td>
+              <td>{{ row[5] }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="alert alert-info">Выберите параметр и нажмите «Показать».</div>
+  {% endif %}
 </section>
 
 {% endblock %}

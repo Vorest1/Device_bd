@@ -103,179 +103,129 @@
       </div>
     </div>
 
-    <!-- device_retailers -->
     <hr>
-    <h5>Информация о продаже устройства</h5>
-    <div id="retailer-section">
-      <div class="row g-3 retailer-block align-items-end">
-        <div class="col-md-4">
-          <label class="form-label">Продавец</label>
-          <div class="input-group">
-            <select class="form-select" name="retailer_id[]" required>
-              <option value="" disabled selected>Выберите...</option>
-              {% for r in retailers %}
-                <option value="{{ r[0] }}">{{ r[1] }}</option>
-              {% endfor %}
-            </select>
-            <a href="{{ url_for('add_retailer', next=request.path) }}" class="btn btn-outline-secondary" title="Добавить продавца">+</a>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Цена на сайте (₽)</label>
-          <input type="number" class="form-control" name="site_price[]" min="0" max="1000000" step="0.01" required>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">В наличии</label>
-          <div class="form-check mt-2">
-            <input class="form-check-input" type="checkbox" name="in_stock0" id="in_stock0">
-            <label class="form-check-label" for="in_stock0">Да</label>
-          </div>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Последнее обновление</label>
-          <input type="date" class="form-control" name="last_updated[]"
-             min="2016-01-01" max="{{ today }}" required>
-        </div>
-        <div class="col-12">
-          <button type="button" class="btn btn-outline-danger btn-sm remove-retailer-btn d-none">Удалить продавца</button>
-        </div>
-      </div>
-    </div>
-    <div class="col-12">
-      <button type="button" class="btn btn-outline-secondary mt-2" id="add-retailer-btn">Добавить ещё продавца</button>
-    </div>
-
+    <!-- Перенесено: формы продавцов теперь на вкладке «Продавцы» (edit_extras) -->
     <div class="col-12 d-flex justify-content-end">
       <button type="submit" class="btn btn-success mt-3">Добавить устройство</button>
     </div>
   </form>
 
   <script>
-  let retailerCount = 1;
-  document.getElementById('add-retailer-btn').onclick = function() {
-    retailerCount++;
-    let section = document.getElementById('retailer-section');
-    let block = document.createElement('div');
-    block.className = 'row g-3 retailer-block align-items-end mt-2';
-    block.innerHTML = `
-      <div class="col-md-4">
-        <div class="input-group">
-          <select class="form-select" name="retailer_id[]" required>
-            <option value="" disabled selected>Выберите...</option>
-            {% for r in retailers %}
-              <option value="{{ r[0] }}">{{ r[1] }}</option>
-            {% endfor %}
-          </select>
-          <a href="{{ url_for('add_retailer', next=request.path) }}" class="btn btn-outline-secondary" title="Добавить продавца">+</a>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <input type="number" class="form-control" name="site_price[]" min="0" max="1000000" step="0.01" required placeholder="Цена на сайте (₽)">
-      </div>
-      <div class="col-md-2">
-        <div class="form-check mt-2">
-          <input class="form-check-input" type="checkbox" name="in_stock${retailerCount}" id="in_stock${retailerCount}">
-          <label class="form-check-label" for="in_stock${retailerCount}">В наличии</label>
-        </div>
-      </div>
-      <div class="col-md-2">
-        <input type="date" class="form-control" name="last_updated[]" min="2016-01-01" max="{{ today }}" required placeholder="Последнее обновление">
-      </div>
-      <div class="col-12">
-        <button type="button" class="btn btn-outline-danger btn-sm remove-retailer-btn">Удалить продавца</button>
-      </div>
-    `;
-    section.appendChild(block);
-    updateRemoveButtons();
-  };
-  function updateRemoveButtons() {
-    let btns = document.querySelectorAll('.remove-retailer-btn');
-    btns.forEach((btn, idx) => {
-      btn.classList.toggle('d-none', document.querySelectorAll('.retailer-block').length === 1);
-      btn.onclick = function() {
-        btn.closest('.retailer-block').remove();
-        updateRemoveButtons();
-      }
-    });
-  }
-  updateRemoveButtons();
-  </script>
+document.addEventListener('DOMContentLoaded', () => {
+  const FORM = document.querySelector('form');
+  if (!FORM) return;
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  // 1. ВОССТАНОВЛЕНИЕ
-  if (localStorage.getItem('addDeviceForm')) {
-    let formData = JSON.parse(localStorage.getItem('addDeviceForm'));
-    // Восстановление обычных полей
-    for (let key in formData) {
-      if (Array.isArray(formData[key])) continue; // обработаем ниже
-      let el = document.querySelector('[name="' + key + '"]');
-      if (!el) continue;
-      if (el.type === 'checkbox') {
-        el.checked = formData[key];
+  const KEY = 'addDeviceForm:v3';
+
+  // ---------- restore ----------
+  (function restore() {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return;
+    let data;
+    try { data = JSON.parse(raw); } catch { localStorage.removeItem(KEY); return; }
+
+    // 1) Обычные поля (все [name], кроме массивов name="...[]")
+    FORM.querySelectorAll('[name]:not([name$="[]"])').forEach(el => {
+      if (!(el.name in data.scalars)) return;
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        el.checked = !!data.scalars[el.name];
       } else {
-        el.value = formData[key];
+        // для <select> — ставим только если значение есть среди опций
+        if (el.tagName === 'SELECT') {
+          const val = String(data.scalars[el.name]);
+          if (Array.from(el.options).some(o => o.value === val)) el.value = val;
+        } else {
+          el.value = data.scalars[el.name];
+        }
+      }
+    });
+
+    // 2) Динамические массивы продавцов (если такие элементы есть на странице)
+    const arrays = data.arrays || {};
+    const blocks = () => document.querySelectorAll('.retailer-block');
+    const addBtn = document.getElementById('add-retailer-btn');
+
+    if (arrays['retailer_id[]'] || arrays['site_price[]'] || arrays['last_updated[]']) {
+      const need = Math.max(
+        arrays['retailer_id[]']?.length || 0,
+        arrays['site_price[]']?.length  || 0,
+        arrays['last_updated[]']?.length|| 0
+      );
+      if (need > blocks().length && addBtn) {
+        for (let i = blocks().length; i < need; i++) addBtn.click();
+      }
+      const blks = blocks();
+      for (let i = 0; i < need && i < blks.length; i++) {
+        const b = blks[i];
+        const set = (sel, val) => { const el = b.querySelector(sel); if (!el) return;
+          if (el.tagName === 'SELECT') {
+            if (Array.from(el.options).some(o => o.value == val)) el.value = val;
+          } else { el.value = val; }
+        };
+        if (arrays['retailer_id[]']) set('[name="retailer_id[]"]', arrays['retailer_id[]'][i] ?? '');
+        if (arrays['site_price[]'])  set('[name="site_price[]"]',  arrays['site_price[]'][i]  ?? '');
+        if (arrays['last_updated[]'])set('[name="last_updated[]"]',arrays['last_updated[]'][i]?? '');
+        // чекбокс наличия
+        const ch = b.querySelector('[type="checkbox"]');
+        if (ch && Object.prototype.hasOwnProperty.call(data.checks, 'in_stock'+i)) {
+          ch.checked = !!data.checks['in_stock'+i];
+        }
       }
     }
-    // Восстановление массива продавцов
-    if (formData['retailer_id[]'] && Array.isArray(formData['retailer_id[]'])) {
-      let count = formData['retailer_id[]'].length;
-      // если блоков продавцов меньше, чем надо — добавить блоки
-      for (let i = document.querySelectorAll('.retailer-block').length; i < count; i++) {
-        document.getElementById('add-retailer-btn').click();
-      }
-      // теперь восстановить значения
-      let blocks = document.querySelectorAll('.retailer-block');
-      for (let i = 0; i < count; i++) {
-        let block = blocks[i];
-        // Продавец
-        let sel = block.querySelector('[name="retailer_id[]"]');
-        if (sel) sel.value = formData['retailer_id[]'][i];
-        // Цена
-        let price = block.querySelector('[name="site_price[]"]');
-        if (price) price.value = formData['site_price[]'][i];
-        // Дата
-        let date = block.querySelector('[name="last_updated[]"]');
-        if (date) date.value = formData['last_updated[]'][i];
-        // В наличии (чекбокс)
-        let check = block.querySelector('[type="checkbox"]');
-        if (check && formData['in_stock'+i] !== undefined)
-          check.checked = formData['in_stock'+i];
-      }
-    }
-    localStorage.removeItem('addDeviceForm');
+
+    // одноразовое восстановление
+    localStorage.removeItem(KEY);
+  })();
+
+  // ---------- save before leaving to any dict "plus" link ----------
+  function isDictAddLink(a) {
+    if (!a || a.tagName !== 'A') return false;
+    if (a.classList.contains('dict-add-btn')) return true; // если добавите класс — будет надёжнее
+    const href = a.getAttribute('href') || '';
+    // покрываем add_manufacturer, add_category, add_os, add_retailer, add_row?table_name=...
+    return /\/add_/.test(href) || href.includes('add_row') || href.includes('table_name=');
   }
 
-  // 2. СОХРАНЕНИЕ (для кнопок "+")
-  document.querySelectorAll('a.btn-outline-secondary, a.btn-outline-secondary.btn').forEach(function(btn) {
-    btn.addEventListener('click', function(e) {
-      let data = {};
-      // Обычные поля
-      document.querySelectorAll('form [name]:not([name$="[]"])').forEach(function(input) {
-        if (input.type === 'checkbox') {
-          data[input.name] = input.checked;
-        } else {
-          data[input.name] = input.value;
-        }
-      });
-      // Массивы значений (для динамических блоков)
-      ['retailer_id[]', 'site_price[]', 'last_updated[]'].forEach(function(arrName) {
-        let arr = [];
-        document.querySelectorAll('[name="'+arrName+'"]').forEach(function(input) {
-          arr.push(input.value);
-        });
-        data[arrName] = arr;
-      });
-      // Чекбоксы "в наличии"
-      document.querySelectorAll('.retailer-block').forEach(function(block, idx) {
-        let check = block.querySelector('[type="checkbox"]');
-        if (check) data['in_stock'+idx] = check.checked;
-      });
-      localStorage.setItem('addDeviceForm', JSON.stringify(data));
-      // Переход по ссылке произойдет далее
+  function collectData() {
+    const scalars = {};
+    const arrays  = {};
+    const checks  = {};
+
+    // обычные поля
+    FORM.querySelectorAll('[name]:not([name$="[]"])').forEach(el => {
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        scalars[el.name] = !!el.checked;
+      } else {
+        scalars[el.name] = el.value;
+      }
     });
-  });
+
+    // массивы (например retailer_id[], site_price[], last_updated[])
+    const arrayNames = new Set(Array.from(FORM.querySelectorAll('[name$="[]"]')).map(el => el.name));
+    arrayNames.forEach(n => {
+      arrays[n] = Array.from(FORM.querySelectorAll(`[name="${n}"]`)).map(el => el.value);
+    });
+
+    // чекбоксы "в наличии" в блоках продавцов (in_stock0, in_stock1, ...)
+    document.querySelectorAll('.retailer-block').forEach((b, idx) => {
+      const ch = b.querySelector('[type="checkbox"]');
+      if (ch) checks['in_stock' + idx] = !!ch.checked;
+    });
+
+    return { scalars, arrays, checks, ts: Date.now() };
+  }
+
+  // Сохраняем при клике на любую «плюсовую» ссылку (делегирование события – работает и для новых ссылок)
+  ['pointerdown', 'click'].forEach(evt =>
+    document.addEventListener(evt, (e) => {
+      const a = e.target.closest('a');
+      if (!isDictAddLink(a)) return;
+      try { localStorage.setItem(KEY, JSON.stringify(collectData())); } catch {}
+    }, true) // capture, чтобы сработало до навигации
+  );
 });
 </script>
+
+
 
 {% endblock %}

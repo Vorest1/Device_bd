@@ -125,16 +125,32 @@
 
           <!-- Правый блок: яркая кнопка -->
           <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-            <li class="nav-item ms-lg-2">
-              <a
-                class="btn btn-success btn-sm rounded-pill px-3 btn-add-device {% if request.endpoint == 'add_device' %}active{% endif %}"
-                href="{{ url_for('add_device') }}"
-                role="button"
-              >
-                ＋ Добавить устройство
-              </a>
-            </li>
+            {% if current_user.is_authenticated %}
+              <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'profile' %}active{% endif %}"
+                  href="{{ url_for('profile') }}">Профиль</a>
+              </li>
+              {% if is_admin %}
+                <li class="nav-item ms-lg-2">
+                  <a class="btn btn-success rounded-pill px-4 btn-add-device
+                            {% if request.endpoint == 'add_device' %}active{% endif %}"
+                    href="{{ url_for('add_device') }}">
+                    ＋ Добавить устройство
+                  </a>
+                </li>
+              {% endif %}
+            {% else %}
+              <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'login' %}active{% endif %}"
+                  href="{{ url_for('login') }}">Войти</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'register' %}active{% endif %}"
+                  href="{{ url_for('register') }}">Регистрация</a>
+              </li>
+            {% endif %}
           </ul>
+
         </div>
       </div>
     </nav>
@@ -215,6 +231,47 @@
           EXTRAS_FINISHING = false;
         });
       });
+    </script>
+
+    <!-- UNIVERSAL OVERLAY MODAL (для edit_extras и др.) -->
+    <div class="modal fade" id="overlayModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-fullscreen-md-down modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="overlayModalTitle">Редактирование</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-0">
+            <iframe id="overlayFrame" class="w-100 border-0" style="height:60vh;" src=""></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    // Открытие любой ссылки с data-overlay="1" в модалке-оверлее
+    document.addEventListener('click', function(e){
+      const a = e.target.closest('a[data-overlay="1"]');
+      if (!a) return;
+      e.preventDefault();
+      const href  = a.getAttribute('href');
+      const title = a.getAttribute('data-title') || a.textContent.trim() || 'Редактирование';
+      const modalEl = document.getElementById('overlayModal');
+      const frame   = document.getElementById('overlayFrame');
+      document.getElementById('overlayModalTitle').textContent = title;
+      frame.src = href;
+      const modal = new bootstrap.Modal(modalEl);
+      modal.show();
+      // подгоняем высоту iframe под окно
+      const fit = () => {
+        const header = modalEl.querySelector('.modal-header');
+        const h = Math.max(300, window.innerHeight - (header?.offsetHeight || 64) - 48);
+        frame.style.height = h + 'px';
+      };
+      fit();
+      window.addEventListener('resize', fit, { passive:true });
+      modalEl.addEventListener('hidden.bs.modal', () => window.removeEventListener('resize', fit), { once:true });
+    });
     </script>
   </body>
 </html>

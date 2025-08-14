@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
+
+
 <script>
 (function(){
   try{
@@ -64,6 +66,7 @@
   <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#display">Дисплей</button></li>
   <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#camera">Камера</button></li>
   <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#battery">Батарея</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#offers">Продавцы</button></li>
 </ul>
 
 <div class="tab-content">
@@ -286,9 +289,9 @@
         <div class="col-md-3">
           <label class="form-label">Быстрая зарядка (Вт)</label>
           <input type="number" step="0.1" class="form-control" name="fast_charging_w"
-                 min="0.0" max="1000.0" required
-                 value="{{ battery[3] if battery else '' }}" placeholder="напр., 33.0">
-          <div class="invalid-feedback">Укажите мощность быстрой зарядки (Вт).</div>
+                 min="0.0" max="20.0" required
+                 value="{{ battery[3] if battery else '' }}" placeholder="напр., 10.0">
+          <div class="invalid-feedback">Укажите мощность быстрой зарядки ( 0 - 20 Вт).</div>
         </div>
 
         <div class="col-md-3">
@@ -314,6 +317,89 @@
       </div>
     </form>
   </div>
+
+  <!-- Продавцы -->
+  <div class="tab-pane fade" id="offers">
+    <form method="POST" class="row g-3 needs-validation" novalidate>
+      <input type="hidden" name="embedded" value="{{ 1 if request.args.get('embedded') else '' }}">
+      <input type="hidden" name="tab" value="offers">
+
+      <div class="col-md-4">
+        <label class="form-label">Продавец</label>
+        <div class="input-group">
+          <select class="form-select" name="retailer_id" required>
+            <option value="" selected>Не выбрано</option>
+            {% for r in retailers %}
+              <option value="{{ r[0] }}">{{ r[1] }}</option>
+            {% endfor %}
+          </select>
+          <a class="btn btn-outline-secondary dict-add-btn"
+             data-tab="offers"
+             href="{{ url_for('add_retailer',
+                              table_name='retailers',
+                              next=url_for('edit_extras', device_id=device_id, embedded=1)) }}"
+             title="Добавить продавца">+</a>
+          <div class="invalid-feedback">Выберите продавца.</div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Цена (₽)</label>
+        <input type="number" class="form-control" name="site_price"
+               min="0" max="1000000" step="0.01" required placeholder="напр., 24990.00">
+        <div class="invalid-feedback">Укажите цену (0–1 000 000).</div>
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label d-block">В наличии</label>
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" name="in_stock" id="in_stock_offer">
+          <label class="form-check-label" for="in_stock_offer">Да</label>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Обновлено</label>
+        <input type="date" class="form-control" name="last_updated"
+               min="2016-01-01" max="{{ today }}" value="{{ today }}" required>
+        <div class="invalid-feedback">Дата 2016-01-01…{{ today }}.</div>
+      </div>
+
+      <div class="col-12">
+        <button class="btn btn-success" type="submit" name="action" value="add_offer">Добавить продавца</button>
+      </div>
+    </form>
+
+    <hr class="my-3">
+    <h5>Текущие предложения</h5>
+    {% if offers and offers|length %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead><tr><th>Продавец</th><th>Цена</th><th>В наличии</th><th>Обновлено</th><th></th></tr></thead>
+          <tbody>
+            {% for o in offers %}
+              <tr>
+                <td>{{ o[2] }}</td> {# имя продавца #}
+                <td>{{ '%.2f'|format(o[3]) }}</td> {# цена #}
+                <td>{{ 'Да' if o[4] else 'Нет' }}</td> {# наличие #}
+                <td>{{ o[5] }}</td> {# дата #}
+                <td>
+                  <form method="POST" class="d-inline">
+                    <input type="hidden" name="embedded" value="{{ 1 if request.args.get('embedded') else '' }}">
+                    <input type="hidden" name="tab" value="offers">
+                    <input type="hidden" name="device_retailer_id" value="{{ o[0] }}">
+                    <button class="btn btn-outline-danger btn-sm" name="action" value="del_offer">Удалить</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-muted">Нет добавленных продавцов.</div>
+    {% endif %}
+  </div>
 </div>
 
 <button type="button" class="btn btn-success"
@@ -327,14 +413,21 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  // Показать модалку, если пришли с offer=1
+  // === Показать модалку, если пришли с offer=1, и перейти на вкладку «Продавцы» ===
   const params = new URLSearchParams(window.location.search);
   if (params.has('offer')) {
-    const modal = new bootstrap.Modal(document.getElementById('extrasOfferModal'));
-    modal.show();
+    const modalEl = document.getElementById('extrasOfferModal');
+    if (modalEl && window.bootstrap?.Modal) {
+      new bootstrap.Modal(modalEl).show();
+    }
+    // Переключимся на вкладку «Продавцы», если она есть
+    const offersTrigger = document.querySelector('#extrasTabs [data-bs-target="#offers"]');
+    if (offersTrigger && window.bootstrap?.Tab) {
+      new bootstrap.Tab(offersTrigger).show();
+    }
   }
 
-  // Первая незаполненная вкладка
+  // === Кнопка «Начать заполнение» — перейти на первую незаполненную вкладку ===
   const firstIncomplete =
     {% if not spec %}'specification'
     {% elif not display %}'display'
@@ -344,78 +437,104 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('startFillBtn')?.addEventListener('click', function () {
     if (!firstIncomplete) return;
-    const trigger = document.querySelector(`[data-bs-target="#${firstIncomplete}"]`);
-    if (trigger) {
+    const trigger = document.querySelector(`#extrasTabs [data-bs-target="#${firstIncomplete}"]`);
+    if (trigger && window.bootstrap?.Tab) {
       new bootstrap.Tab(trigger).show();
       trigger.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   });
 
-  const deviceId = {{ device_id }};
+  // === Ключи хранилища ===
+  const deviceId   = {{ device_id }}; // числовой id
   const STORAGE_KEY = (tab) => `extras:${deviceId}:${tab}`;
-  const TAB_KEY = `extras:${deviceId}:activeTab`;
+  const TAB_KEY     = `extras:${deviceId}:activeTab`;
 
+  // === Утилиты сериализации форм ===
   function serializeForm(form) {
     const data = {};
-    [...form.elements].forEach(el => {
+    Array.from(form.elements).forEach(el => {
       if (!el.name) return;
-      data[el.name] = (el.type === 'checkbox') ? (el.checked ? 'on':'') : el.value;
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        data[el.name] = el.checked ? 'on' : '';
+      } else {
+        data[el.name] = el.value;
+      }
     });
     return data;
   }
+
   function restoreForm(form, data) {
     if (!data) return;
-    [...form.elements].forEach(el => {
+    Array.from(form.elements).forEach(el => {
       if (!el.name) return;
-      if (data.hasOwnProperty(el.name)) {
-        if (el.type === 'checkbox') el.checked = data[el.name] === 'on';
-        else el.value = data[el.name];
+      if (!(el.name in data)) return;
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        el.checked = (data[el.name] === 'on');
+      } else {
+        el.value = data[el.name];
       }
     });
   }
+
   function getActiveTabId() {
     const trigger = document.querySelector('#extrasTabs .nav-link.active');
-    return trigger ? trigger.getAttribute('data-bs-target').replace('#','') : 'specification';
-  }
-  function setActiveTab(tabId) {
-    const trigger = document.querySelector(`[data-bs-target="#${tabId}"]`);
-    if (trigger) new bootstrap.Tab(trigger).show();
+    return trigger ? trigger.getAttribute('data-bs-target').replace('#', '') : 'specification';
   }
 
-  // Запоминаем активную вкладку
+  function setActiveTab(tabId) {
+    const trigger = document.querySelector(`#extrasTabs [data-bs-target="#${tabId}"]`);
+    if (trigger && window.bootstrap?.Tab) {
+      new bootstrap.Tab(trigger).show();
+    }
+  }
+
+  // === Запоминание активной вкладки ===
   document.querySelectorAll('#extrasTabs .nav-link').forEach(btn => {
     btn.addEventListener('shown.bs.tab', () => {
       localStorage.setItem(TAB_KEY, getActiveTabId());
     });
   });
 
-  // Сохраняем форму перед переходом по «+»
-  document.querySelectorAll('.dict-add-btn').forEach(a => {
+  // === Сохранение форм перед переходом по «+» (добавление в справочники) ===
+  // Ожидается, что ссылки имеют класс .dict-add-btn и data-tab="<id вкладки>"
+  document.querySelectorAll('.dict-add-btn, a[data-dict-add="1"]').forEach(a => {
     a.addEventListener('click', () => {
-      const tabId = a.dataset.tab;
+      const tabId = a.dataset.tab || getActiveTabId();
       const form = document.querySelector(`#${tabId} form`);
       if (form) {
-        localStorage.setItem(STORAGE_KEY(tabId), JSON.stringify(serializeForm(form)));
-        localStorage.setItem(TAB_KEY, tabId);
+        try {
+          localStorage.setItem(STORAGE_KEY(tabId), JSON.stringify(serializeForm(form)));
+          localStorage.setItem(TAB_KEY, tabId);
+        } catch (_) {}
       }
     });
   });
 
-  // Восстановление после возврата
+  // === Восстановление активной вкладки ===
   const savedTab = localStorage.getItem(TAB_KEY);
   if (savedTab) setActiveTab(savedTab);
-  ['specification','display','camera','battery'].forEach(tabId => {
+
+  // === Восстановление данных форм по всем вкладкам, включая «Продавцы» ===
+  ['specification', 'display', 'camera', 'battery', 'offers'].forEach(tabId => {
     const saved = localStorage.getItem(STORAGE_KEY(tabId));
-    if (saved) {
-      const form = document.querySelector(`#${tabId} form`);
-      if (form) {
-        try { restoreForm(form, JSON.parse(saved)); } catch(e) {}
-        localStorage.removeItem(STORAGE_KEY(tabId));
-      }
+    if (!saved) return;
+    const form = document.querySelector(`#${tabId} form`);
+    if (!form) {
+      localStorage.removeItem(STORAGE_KEY(tabId));
+      return;
     }
+    try { restoreForm(form, JSON.parse(saved)); } catch (_) {}
+    localStorage.removeItem(STORAGE_KEY(tabId));
   });
 
-  // Единая валидация для всех подформ
+  // === Подтверждение удаления предложения на вкладке «Продавцы» ===
+  document.querySelectorAll('#offers form button[name="action"][value="del_offer"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      if (!confirm('Удалить это предложение?')) e.preventDefault();
+    });
+  });
+
+  // === Единая Bootstrap-валидация для всех подформ ===
   document.querySelectorAll('.tab-pane form.needs-validation').forEach(form => {
     form.addEventListener('submit', function (e) {
       if (!form.checkValidity()) {
@@ -424,13 +543,14 @@ document.addEventListener('DOMContentLoaded', function () {
         form.classList.add('was-validated');
         const firstInvalid = form.querySelector(':invalid');
         if (firstInvalid) {
-          try { firstInvalid.focus({preventScroll:true}); } catch(e){}
-          firstInvalid.scrollIntoView({behavior:'smooth', block:'center'});
+          try { firstInvalid.focus({ preventScroll: true }); } catch (_) {}
+          firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }
     });
   });
 });
 </script>
+
 
 {% endblock %}

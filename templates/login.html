@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-3">Вход</h2>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<form method="POST" class="row g-3" action="{{ url_for('login') }}">
+  <div class="col-md-6">
+    <label class="form-label">Логин или email</label>
+    <input type="text" class="form-control" name="login" required>
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Пароль</label>
+    <input type="password" class="form-control" name="password" required>
+  </div>
+  <div class="col-12 d-flex gap-2">
+    <button type="submit" class="btn btn-primary">Войти</button>
+    <a href="{{ url_for('register') }}" class="btn btn-outline-secondary">Регистрация</a>
+  </div>
+</form>
+{% endblock %}
