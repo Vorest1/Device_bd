@@ -20,6 +20,27 @@ login_manager.login_message_category = 'warning'
 app.secret_key = 'your-unique-secret-key-1234567890'
 DB_PATH = os.path.join(os.path.dirname(__file__), 'db', '2lr.db')
 
+SUPERADMIN_USERNAME = 'admin'
+
+def staff_required(view):
+    """Любой авторизованный пользователь (псевдо-«админ»)."""
+    @wraps(view)
+    @login_required
+    def wrapper(*a, **kw):
+        return view(*a, **kw)
+    return wrapper
+
+def superadmin_required(view):
+    """Только настоящий admin (для users)."""
+    @wraps(view)
+    @login_required
+    def wrapper(*a, **kw):
+        if current_user.username != SUPERADMIN_USERNAME:
+            flash('Доступ к этой странице только для пользователя admin.', 'warning')
+            return redirect(url_for('index'))
+        return view(*a, **kw)
+    return wrapper
+
 def admin_required(view):
     @wraps(view)
     def _wrapped(*args, **kwargs):
@@ -31,6 +52,7 @@ def admin_required(view):
             return redirect(url_for('index'))
         return view(*args, **kwargs)
     return _wrapped
+
 class User(UserMixin):
     def __init__(self, user_id, username, email, password_hash, created_at, is_active=True, is_admin=False):
         self.id = user_id
@@ -80,9 +102,9 @@ def register():
             if c.fetchone():
                 flash('Такой логин или email уже заняты.', 'danger')
                 return redirect(url_for('register'))
-            c.execute("""INSERT INTO users (username, email, password_hash, created_at)
-                         VALUES (?, ?, ?, ?)""",
-                      (username, email, generate_password_hash(password), datetime.utcnow().isoformat()))
+            c.execute("""INSERT INTO users (username, email, password_hash, created_at, is_admin)
+                         VALUES (?, ?, ?, ?, ?)""",
+                      (username, email, generate_password_hash(password), datetime.utcnow().isoformat(), 1))
             conn.commit()
             new_id = c.lastrowid
 
@@ -122,6 +144,11 @@ def logout():
     flash('Вы вышли из системы.', 'info')
     return redirect(url_for('index'))
 
+@app.context_processor
+def inject_roles():
+    is_superadmin = current_user.is_authenticated and (getattr(current_user, 'username', '').lower() == SUPERADMIN_USERNAME)
+    is_admin_effective = current_user.is_authenticated  # все залогиненные считаются «админами»
+    return dict(is_superadmin=is_superadmin, is_admin=is_admin_effective)
 
 @app.route('/profile')
 @login_required
@@ -596,14 +623,14 @@ def tables_list():
         tables = [r[0] for r in c.fetchall()]
 
     # Скрываем users для всех, кроме админа
-    if not (current_user.is_authenticated and getattr(current_user, 'is_admin', False)):
+    if not (current_user.is_authenticated and current_user.username == SUPERADMIN_USERNAME):
         tables = [t for t in tables if t.lower() != 'users']
-
     return render_template('table_list.html', tables=tables)
 
 @app.route('/table/<table_name>')
+@staff_required
 def table_view(table_name):
-    if table_name.lower() == 'users' and not (current_user.is_authenticated and getattr(current_user, 'is_admin', False)):
+    if table_name.lower() == 'users' and current_user.username != SUPERADMIN_USERNAME:
         return redirect(url_for('tables_list'))
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
@@ -694,18 +721,22 @@ def delete_row(table_name, pk):
         if current_user.is_authenticated and int(current_user.id) == target_id:
             flash('Нельзя удалить самого себя.', 'warning')
             return redirect(url_for('table_view', table_name=table_name))
-
+        
+        # только admin может удалять пользователей
+        if current_user.username != SUPERADMIN_USERNAME:
+            flash('Удалять пользователей может только admin.', 'danger')
+            return redirect(url_for('table_view', table_name='users'))
+        
         # (Бонус) Защита от удаления последнего администратора
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             c.execute("SELECT is_admin FROM users WHERE user_id = ?", (target_id,))
             row = c.fetchone()
             if row and row[0]:  # удаляемого пользователя — админ
+                if row[0].lower() == SUPERADMIN_USERNAME:
+                    flash('Нельзя удалить пользователя admin.', 'danger')
+                    return redirect(url_for('table_view', table_name='users'))
                 c.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1")
-                admins = c.fetchone()[0] or 0
-                if admins <= 1:
-                    flash('Нельзя удалить последнего администратора.', 'warning')
-                    return redirect(url_for('table_view', table_name=table_name))
     if t in PROTECTED_CHILD_TABLES:
         flash('Удаление записей из этой таблицы доступно только через удаление устройства.', 'warning')
         return redirect(url_for('table_view', table_name=table_name))

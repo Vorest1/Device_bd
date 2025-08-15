@@ -3,9 +3,10 @@
   {% set t = table|lower %}
   {% set admin = (is_admin if (is_admin is defined) else (current_user.is_authenticated and current_user.is_admin)) %}
   {% set blocked = ['displays','batteries','cameras','specifications','device_retailers', 'users'] %}
+  {% set superadmin = (current_user.is_authenticated and current_user.username|lower == 'admin') %}
 
   {# Полное скрытие users для не-админа #}
-  {% if t == 'users' and not admin %}
+  {% if t == 'users' and not superadmin %}
     {# ничего не показываем #}
 
   {% else %}
