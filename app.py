@@ -710,45 +710,71 @@ def add_row(table_name):
 @admin_required
 def delete_row(table_name, pk):
     t = table_name.lower()
-    #Запрет: админ не может удалить самого себя
+
+    # --- Особые правила для таблицы users ---
     if t == 'users':
+        # только супер-админ может удалять пользователей
+        if not (current_user.is_authenticated and current_user.username.lower() == SUPERADMIN_USERNAME):
+            flash('Удалять пользователей может только admin.', 'danger')
+            return redirect(url_for('table_view', table_name='users'))
+
+        # pk должен быть числом
         try:
             target_id = int(pk)
         except ValueError:
             flash('Некорректный идентификатор пользователя.', 'danger')
-            return redirect(url_for('table_view', table_name=table_name))
-
-        if current_user.is_authenticated and int(current_user.id) == target_id:
-            flash('Нельзя удалить самого себя.', 'warning')
-            return redirect(url_for('table_view', table_name=table_name))
-        
-        # только admin может удалять пользователей
-        if current_user.username != SUPERADMIN_USERNAME:
-            flash('Удалять пользователей может только admin.', 'danger')
             return redirect(url_for('table_view', table_name='users'))
-        
-        # (Бонус) Защита от удаления последнего администратора
+
+        # запрет удалять самого себя
+        if str(current_user.id) == str(target_id):
+            flash('Нельзя удалить самого себя.', 'warning')
+            return redirect(url_for('table_view', table_name='users'))
+
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
-            c.execute("SELECT is_admin FROM users WHERE user_id = ?", (target_id,))
+            c.execute("SELECT user_id, username, is_admin FROM users WHERE user_id = ?", (target_id,))
             row = c.fetchone()
-            if row and row[0]:  # удаляемого пользователя — админ
-                if row[0].lower() == SUPERADMIN_USERNAME:
-                    flash('Нельзя удалить пользователя admin.', 'danger')
+            if not row:
+                flash('Пользователь не найден.', 'warning')
+                return redirect(url_for('table_view', table_name='users'))
+
+            _, target_username, target_is_admin = row
+
+            # нельзя удалить учётку admin
+            if (target_username or '').lower() == SUPERADMIN_USERNAME:
+                flash('Нельзя удалить пользователя admin.', 'danger')
+                return redirect(url_for('table_view', table_name='users'))
+
+            # (опционально) защита от удаления последнего администратора
+            if target_is_admin:
+                c.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1 AND user_id != ?", (target_id,))
+                left_admins = c.fetchone()[0]
+                if left_admins == 0:
+                    flash('Нельзя удалить последнего администратора.', 'danger')
                     return redirect(url_for('table_view', table_name='users'))
-                c.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1")
+
+            # удаляем пользователя
+            c.execute("DELETE FROM users WHERE user_id = ?", (target_id,))
+            conn.commit()
+
+        flash('Пользователь удалён.', 'success')
+        return redirect(url_for('table_view', table_name='users'))
+
+    # --- Таблицы, куда удалять напрямую нельзя ---
     if t in PROTECTED_CHILD_TABLES:
         flash('Удаление записей из этой таблицы доступно только через удаление устройства.', 'warning')
         return redirect(url_for('table_view', table_name=table_name))
-    # для устройств используем специальный каскадный роут
-    if table_name == 'devices':
+
+    # --- Устройства удаляем через специальный роут с каскадом ---
+    if t == 'devices':
         return redirect(url_for('delete_device', device_id=pk))
 
+    # --- Обычное удаление для остальных таблиц ---
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         pk_name = get_pk_name(c, table_name)
 
-        # блокируем удаление «справочников» и других таблиц, если используются
+        # блокируем удаление из справочников, если значение используется
         in_use, where = value_in_use(c, table_name, pk)
         if in_use:
             flash(f"Нельзя удалить: значение используется ({where}).", "danger")
@@ -757,8 +783,9 @@ def delete_row(table_name, pk):
         c.execute(f"DELETE FROM {table_name} WHERE {pk_name} = ?", (pk,))
         conn.commit()
 
-    flash("Удалено", "success")
+    flash('Запись удалена.', 'success')
     return redirect(url_for('table_view', table_name=table_name))
+
 
 
 @app.route('/delete_device/<int:device_id>', methods=['POST'])
