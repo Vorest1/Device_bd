@@ -390,6 +390,7 @@ def index():
 
 
 @app.route('/add_device', methods=['GET', 'POST'])
+@login_required
 @admin_required
 def add_device():
     from datetime import date as _Date, datetime as _DT
@@ -411,8 +412,8 @@ def add_device():
             c.fetchall(),
             key=lambda r: (str(r[1]).strip().casefold(), r[2])
         )
-        c.execute("SELECT retailer_id, name FROM retailers")
-        retailers = _sort_ci_tuples(c.fetchall())
+        c.execute("SELECT DISTINCT model FROM devices ORDER BY model COLLATE NOCASE")
+        models = _sort_ci_tuples([row[0] for row in c.fetchall() if row[0]])
         c.execute("SELECT color_id, name FROM color")
         colors = _sort_ci_tuples(c.fetchall())
 
@@ -428,53 +429,6 @@ def add_device():
         is_waterproof = 1 if request.form.get('is_waterproof') == 'on' else 0
         warranty_months = request.form.get('warranty_months')
 
-        # Для device_retailer
-        retailer_ids = request.form.getlist('retailer_id[]')
-        site_prices = request.form.getlist('site_price[]')
-        last_updateds = request.form.getlist('last_updated[]')
-        in_stocks = []
-        for i in range(len(retailer_ids)):
-            in_stock_name = f"in_stock{i}"
-            in_stocks.append(1 if request.form.get(in_stock_name) == 'on' else 0)
-
-        # Проверка длин массивов продавцов
-        if not (len(retailer_ids) == len(site_prices) == len(last_updateds)):
-            flash("Ошибка заполнения продавцов!", "danger")
-            return redirect(url_for('add_device'))
-
-        # Валидация и обработка дат для продавцов
-        for i in range(len(retailer_ids)):
-            last_updated = last_updateds[i]
-            # Сначала валидация диапазона (оригинальный формат HTML — YYYY-MM-DD)
-            if not ("2016-01-01" <= last_updated <= today.strftime("%Y-%m-%d")):
-                flash('Дата обновления у продавца должна быть c 01.01.2016 по текущий день', 'danger')
-                return redirect(url_for('add_device'))
-            # Преобразуем для БД в YYYY.MM.DD
-            last_updateds[i] = datetime.datetime.strptime(last_updated, "%Y-%m-%d").strftime("%Y.%m.%d")
-
-        try:
-            current_price = float(current_price)
-            if not (0 <= current_price <= 1000000):
-                raise ValueError("current_price out of range")
-            weight_grams = int(weight_grams)
-            if not (1 <= weight_grams <= 1000000):
-                raise ValueError("weight_grams out of range")
-            warranty_months = int(warranty_months)
-            if not (1 <= warranty_months <= 24):
-                raise ValueError("warranty_months out of range")
-            if not ("1990-01-01" <= release_date <= today.strftime("%Y-%m-%d")):
-                raise ValueError("release_date out of range")
-        except Exception as e:
-            flash('Некорректные значения: ' + str(e), 'danger')
-            return redirect(url_for('add_device'))
-
-        # Валидация и обработка цен продавцов
-        for i in range(len(retailer_ids)):
-            site_price = float(site_prices[i])
-            if not (0.0 <= site_price <= 1000000.0):
-                flash('Цена у продавца должна быть от 0.0 до 1000000.0', 'danger')
-                return redirect(url_for('add_device'))
-
         # Сохранение в базу
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
@@ -485,12 +439,6 @@ def add_device():
             """, (manufacturer_id, category_id, os_id, model, release_date, current_price, weight_grams, color_id, is_waterproof, warranty_months, current_user.id))
             device_id = c.lastrowid
 
-            # Связь device_retailer (много продавцов)
-            for i in range(len(retailer_ids)):
-                c.execute("""
-                    INSERT INTO device_retailers (device_id, retailer_id, price, in_stock, last_updated)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (device_id, retailer_ids[i], site_prices[i], in_stocks[i], last_updateds[i]))
             conn.commit()
         flash('Устройство добавлено. При желании заполните дополнительные характеристики.', 'success')
         return redirect(url_for('add_device', open_extras_for=device_id))
@@ -505,7 +453,7 @@ def add_device():
         manufacturers=manufacturers,
         categories=categories,
         operating_systems=operating_systems,
-        retailers=retailers,
+        models=models,
         colors=colors,
         min_date=min_date,
         max_date=max_date,
@@ -628,7 +576,7 @@ def tables_list():
     return render_template('table_list.html', tables=tables)
 
 @app.route('/table/<table_name>')
-@staff_required
+# @staff_required
 def table_view(table_name):
     if table_name.lower() == 'users' and current_user.username != SUPERADMIN_USERNAME:
         return redirect(url_for('tables_list'))
@@ -710,71 +658,45 @@ def add_row(table_name):
 @admin_required
 def delete_row(table_name, pk):
     t = table_name.lower()
-
-    # --- Особые правила для таблицы users ---
+    #Запрет: админ не может удалить самого себя
     if t == 'users':
-        # только супер-админ может удалять пользователей
-        if not (current_user.is_authenticated and current_user.username.lower() == SUPERADMIN_USERNAME):
-            flash('Удалять пользователей может только admin.', 'danger')
-            return redirect(url_for('table_view', table_name='users'))
-
-        # pk должен быть числом
         try:
             target_id = int(pk)
         except ValueError:
             flash('Некорректный идентификатор пользователя.', 'danger')
-            return redirect(url_for('table_view', table_name='users'))
+            return redirect(url_for('table_view', table_name=table_name))
 
-        # запрет удалять самого себя
-        if str(current_user.id) == str(target_id):
+        if current_user.is_authenticated and int(current_user.id) == target_id:
             flash('Нельзя удалить самого себя.', 'warning')
+            return redirect(url_for('table_view', table_name=table_name))
+        
+        # только admin может удалять пользователей
+        if current_user.username != SUPERADMIN_USERNAME:
+            flash('Удалять пользователей может только admin.', 'danger')
             return redirect(url_for('table_view', table_name='users'))
-
+        
+        # (Бонус) Защита от удаления последнего администратора
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
-            c.execute("SELECT user_id, username, is_admin FROM users WHERE user_id = ?", (target_id,))
+            c.execute("SELECT is_admin FROM users WHERE user_id = ?", (target_id,))
             row = c.fetchone()
-            if not row:
-                flash('Пользователь не найден.', 'warning')
-                return redirect(url_for('table_view', table_name='users'))
-
-            _, target_username, target_is_admin = row
-
-            # нельзя удалить учётку admin
-            if (target_username or '').lower() == SUPERADMIN_USERNAME:
-                flash('Нельзя удалить пользователя admin.', 'danger')
-                return redirect(url_for('table_view', table_name='users'))
-
-            # (опционально) защита от удаления последнего администратора
-            if target_is_admin:
-                c.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1 AND user_id != ?", (target_id,))
-                left_admins = c.fetchone()[0]
-                if left_admins == 0:
-                    flash('Нельзя удалить последнего администратора.', 'danger')
+            if row and row[0]:  # удаляемого пользователя — админ
+                if row[0].lower() == SUPERADMIN_USERNAME:
+                    flash('Нельзя удалить пользователя admin.', 'danger')
                     return redirect(url_for('table_view', table_name='users'))
-
-            # удаляем пользователя
-            c.execute("DELETE FROM users WHERE user_id = ?", (target_id,))
-            conn.commit()
-
-        flash('Пользователь удалён.', 'success')
-        return redirect(url_for('table_view', table_name='users'))
-
-    # --- Таблицы, куда удалять напрямую нельзя ---
+                c.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1")
     if t in PROTECTED_CHILD_TABLES:
         flash('Удаление записей из этой таблицы доступно только через удаление устройства.', 'warning')
         return redirect(url_for('table_view', table_name=table_name))
-
-    # --- Устройства удаляем через специальный роут с каскадом ---
-    if t == 'devices':
+    # для устройств используем специальный каскадный роут
+    if table_name == 'devices':
         return redirect(url_for('delete_device', device_id=pk))
 
-    # --- Обычное удаление для остальных таблиц ---
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         pk_name = get_pk_name(c, table_name)
 
-        # блокируем удаление из справочников, если значение используется
+        # блокируем удаление «справочников» и других таблиц, если используются
         in_use, where = value_in_use(c, table_name, pk)
         if in_use:
             flash(f"Нельзя удалить: значение используется ({where}).", "danger")
@@ -783,9 +705,8 @@ def delete_row(table_name, pk):
         c.execute(f"DELETE FROM {table_name} WHERE {pk_name} = ?", (pk,))
         conn.commit()
 
-    flash('Запись удалена.', 'success')
+    flash("Удалено", "success")
     return redirect(url_for('table_view', table_name=table_name))
-
 
 
 @app.route('/delete_device/<int:device_id>', methods=['POST'])
@@ -1445,6 +1366,8 @@ def edit_extras(device_id):
         c = conn.cursor()
 
         # Справочники для выпадающих списков
+        c.execute("SELECT DISTINCT aperture_main FROM cameras ORDER BY aperture_main COLLATE NOCASE")
+        aperture_main = [row[0] for row in c.fetchall() if row[0]]
         c.execute("SELECT proc_model_id, name FROM proc_model")
         proc_models = _sort_ci_tuples(c.fetchall())
         c.execute("SELECT storage_type_id, name FROM storage_type")
@@ -1771,6 +1694,7 @@ def edit_extras(device_id):
         proc_models=proc_models,
         storage_types=storage_types,
         techn_matrices=techn_matrices,
+        aperture_main=aperture_main,
         spec=spec,
         display=display,
         camera=camera,

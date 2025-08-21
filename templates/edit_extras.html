@@ -163,12 +163,15 @@
 
         <div class="col-md-2">
           <label class="form-label">Разрешение</label>
-          <input type="text" class="form-control" name="resolution"
-                 minlength="7" maxlength="11" required
-                 pattern="^\s*\d{3,5}\s*[xX×*]\s*\d{3,5}\s*$"
-                 title="Формат: ширина×высота, напр. 2400x1080"
-                 value="{{ display[3] if display else '' }}" placeholder="напр., 2400x1080">
-          <div class="invalid-feedback">Формат: ширина×высота (например, 2400x1080).</div>
+          
+            <input type="text" class="form-control" name="resolution"
+                  list="resolutionList"
+                  minlength="7" maxlength="11" required
+                  pattern="^\s*\d{3,5}\s*[xX×*]\s*\d{3,5}\s*$"
+                  title="Формат: ширина×высота, напр. 2400x1080"
+                  value="{{ display[3] if display else '' }}" placeholder="напр., 2400x1080">
+            <div class="invalid-feedback">Формат: ширина×высота (например, 2400x1080).</div>
+
         </div>
 
         <div class="col-md-3">
@@ -230,13 +233,56 @@
 
         <div class="col-md-2">
           <label class="form-label">Диафрагма</label>
-          <input type="text" class="form-control" name="aperture_main"
-                 minlength="1" maxlength="4" required
-                 pattern="^\d(\.\d)?$"
-                 title="Только число, напр. 1.8"
-                 value="{{ camera[3] if camera else '' }}" placeholder="напр., 1.8">
-          <div class="invalid-feedback">Укажите диафрагму (например, 1.8).</div>
+          <div class="input-group">
+            <input type="text" class="form-control" name="aperture_main"
+                  list="aperture_mainList"
+                  minlength="1" maxlength="4" required
+                  pattern="^F\d(\.\d)?$"
+                  title="F-число, напр. F1.8"
+                  value="{{ camera[3] if camera else '' }}" placeholder="напр., F1.8">
+            <datalist id="aperture_mainList">
+              {%for name in aperture_main %}
+                <option value="{{ name }}"></option>
+              {% endfor %}
+            </datalist>
+            <!-- Кнопка «+» как у категории -->
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    id="addModelBtn"
+                    title="Добавить новое значение диафрагмы">
+              +
+            </button>
+          </div>
+          <div class="invalid-feedback">Укажите диафрагму (например, F1.8).</div>
+          <div class="form-text">
+            Выберите из списка существующих разрешений или добавьте новую через «+».
+          </div>
         </div>
+                <script>
+        document.addEventListener('DOMContentLoaded', () => {
+          const addBtn = document.getElementById('addModelBtn');
+          if (!addBtn) return;
+
+          addBtn.addEventListener('click', () => {
+            const input = document.querySelector('input[name="aperture_main"]');
+            const current = (input?.value || '').trim();
+            const name = prompt('Введите значение диафрагмы', current);
+            if (!name) return;
+
+            // подставим введённое значение в поле
+            input.value = name;
+
+            // и добавим его в список подсказок, если там ещё нет
+            const dl = document.getElementById('aperture_main');
+            if (dl && !Array.from(dl.options).some(o => o.value === name)) {
+              const opt = document.createElement('option');
+              opt.value = name;
+              dl.appendChild(opt);
+            }
+          });
+        });
+        </script>
+
 
         <div class="col-md-2">
           <label class="form-label">Зум (x)</label>

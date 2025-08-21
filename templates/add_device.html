@@ -52,8 +52,60 @@
     <!-- Модель -->
     <div class="col-md-4">
       <label class="form-label">Модель</label>
-      <input type="text" class="form-control" name="model" maxlength="30" required>
+      <div class="input-group">
+        <!-- инпут с подсказками из datalist -->
+        <input
+          type="text"
+          class="form-control"
+          name="model"
+          list="modelsList"
+          maxlength="30"
+          required
+          placeholder="Начните вводить или выберите из списка..."
+        >
+        <datalist id="modelsList">
+          {% for name in models %}
+            <option value="{{ name }}"></option>
+          {% endfor %}
+        </datalist>
+
+        <!-- Кнопка «+» как у категории -->
+        <button type="button"
+                class="btn btn-outline-secondary"
+                id="addModelBtn"
+                title="Добавить новую модель">
+          +
+        </button>
+      </div>
+      <div class="form-text">
+        Выберите из списка существующих моделей или добавьте новую через «+».
+      </div>
     </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const addBtn = document.getElementById('addModelBtn');
+      if (!addBtn) return;
+
+      addBtn.addEventListener('click', () => {
+        const input = document.querySelector('input[name="model"]');
+        const current = (input?.value || '').trim();
+        const name = prompt('Введите название модели', current);
+        if (!name) return;
+
+        // подставим введённое значение в поле
+        input.value = name;
+
+        // и добавим его в список подсказок, если там ещё нет
+        const dl = document.getElementById('modelsList');
+        if (dl && !Array.from(dl.options).some(o => o.value === name)) {
+          const opt = document.createElement('option');
+          opt.value = name;
+          dl.appendChild(opt);
+        }
+      });
+    });
+    </script>
     <!-- Дата выпуска -->
     <div class="col-md-4">
       <label class="form-label">Дата выпуска</label>
