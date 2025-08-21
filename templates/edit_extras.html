@@ -234,51 +234,78 @@
         <div class="col-md-2">
           <label class="form-label">Диафрагма</label>
           <div class="input-group">
-            <input type="text" class="form-control" name="aperture_main"
-                  list="aperture_mainList"
-                  minlength="1" maxlength="4" required
-                  pattern="^F\d(\.\d)?$"
-                  title="F-число, напр. F1.8"
-                  value="{{ camera[3] if camera else '' }}" placeholder="напр., F1.8">
-            <datalist id="aperture_mainList">
-              {%for name in aperture_main %}
-                <option value="{{ name }}"></option>
+            <select class="form-select" name="aperture_main" id="apertureSelect" required>
+              <option value="" selected disabled>Выберите F-число...</option>
+              {% for name in aperture_main %}
+                {# если в данных нет 'F', добавим префикс для единообразия #}
+                {% set v = name %}
+                {% if v and not v.startswith('F') %}
+                  {% set v = 'F' ~ v %}
+                {% endif %}
+                <option value="{{ v }}">{{ v }}</option>
               {% endfor %}
-            </datalist>
-            <!-- Кнопка «+» как у категории -->
+            </select>
+
+            <!-- Кнопка «+» -->
             <button type="button"
                     class="btn btn-outline-secondary"
-                    id="addModelBtn"
-                    title="Добавить новое значение диафрагмы">
-              +
-            </button>
+                    id="addApertureBtn"
+                    title="Добавить новое значение диафрагмы">+</button>
           </div>
-          <div class="invalid-feedback">Укажите диафрагму (например, F1.8).</div>
-          <div class="form-text">
-            Выберите из списка существующих разрешений или добавьте новую через «+».
-          </div>
+
+          <div class="invalid-feedback">Выберите диафрагму (например, F1.8).</div>
+          <div class="form-text">Выберите из списка или добавьте значение через «+».</div>
         </div>
-                <script>
-        document.addEventListener('DOMContentLoaded', () => {
-          const addBtn = document.getElementById('addModelBtn');
-          if (!addBtn) return;
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function(){
+          const select = document.getElementById('apertureSelect');
+          const addBtn = document.getElementById('addApertureBtn');
+          if (!select || !addBtn) return;
+
+          // Нормализация ввода: "1.8" -> "F1.8", "f 2.0" -> "F2.0", замена запятой на точку
+          function normalize(val){
+            let v = (val || '').trim().toUpperCase().replace(',', '.');
+            v = v.replace(/^F\s*/,'F');           // "F 1.8" -> "F1.8"
+            if (/^\d{1,2}\.\d$/.test(v)) v = 'F' + v; // "1.8" -> "F1.8"
+            return v;
+          }
+          function isValid(v){
+            return /^F\d{1,2}\.\d$/.test(v);      // формат F{a}.{b}, напр. F1.8
+          }
+          function hasOption(v){
+            const vv = v.trim().toLowerCase();
+            return Array.from(select.options).some(o => (o.value || '').trim().toLowerCase() === vv);
+          }
+          function insertSorted(value){
+            const opt = new Option(value, value);
+            let inserted = false;
+            // пропускаем первую disabled-опцию
+            for (let i = 1; i < select.options.length; i++) {
+              const o = select.options[i];
+              if (o.value.localeCompare(value, undefined, {sensitivity:'base'}) > 0) {
+                select.add(opt, i);
+                inserted = true;
+                break;
+              }
+            }
+            if (!inserted) select.add(opt);
+          }
 
           addBtn.addEventListener('click', () => {
-            const input = document.querySelector('input[name="aperture_main"]');
-            const current = (input?.value || '').trim();
-            const name = prompt('Введите значение диафрагмы', current);
+            const suggested = select.value || 'F1.8';
+            let name = prompt('Введите значение диафрагмы в формате F{a}.{b} (например, F1.8)', suggested);
             if (!name) return;
 
-            // подставим введённое значение в поле
-            input.value = name;
-
-            // и добавим его в список подсказок, если там ещё нет
-            const dl = document.getElementById('aperture_main');
-            if (dl && !Array.from(dl.options).some(o => o.value === name)) {
-              const opt = document.createElement('option');
-              opt.value = name;
-              dl.appendChild(opt);
+            name = normalize(name);
+            if (!isValid(name)) {
+              alert('Неверный формат. Используйте F{a}.{b}, например F1.8');
+              return;
             }
+
+            if (!hasOption(name)) insertSorted(name);
+            select.value = name;
+            select.dispatchEvent(new Event('change'));
           });
         });
         </script>

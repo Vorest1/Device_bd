@@ -54,20 +54,12 @@
       <label class="form-label">Модель</label>
       <div class="input-group">
         <!-- инпут с подсказками из datalist -->
-        <input
-          type="text"
-          class="form-control"
-          name="model"
-          list="modelsList"
-          maxlength="30"
-          required
-          placeholder="Начните вводить или выберите из списка..."
-        >
-        <datalist id="modelsList">
+        <select class="form-select" name="model" id="modelSelect" required>
+          <option value="" selected disabled>Выберите модель...</option>
           {% for name in models %}
-            <option value="{{ name }}"></option>
+            <option value="{{ name }}">{{ name }}</option>
           {% endfor %}
-        </datalist>
+        </select>
 
         <!-- Кнопка «+» как у категории -->
         <button type="button"
@@ -83,29 +75,53 @@
     </div>
 
     <script>
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', function(){
       const addBtn = document.getElementById('addModelBtn');
-      if (!addBtn) return;
+      const select = document.getElementById('modelSelect');
+      if (!addBtn || !select) return;
+
+      function optionExists(val){
+        const v = (val||'').trim().toLowerCase();
+        return Array.from(select.options).some(o => o.value.trim().toLowerCase() === v);
+      }
 
       addBtn.addEventListener('click', () => {
-        const input = document.querySelector('input[name="model"]');
-        const current = (input?.value || '').trim();
+        const current = select.value || '';
         const name = prompt('Введите название модели', current);
         if (!name) return;
 
-        // подставим введённое значение в поле
-        input.value = name;
+        const value = name.trim();
 
-        // и добавим его в список подсказок, если там ещё нет
-        const dl = document.getElementById('modelsList');
-        if (dl && !Array.from(dl.options).some(o => o.value === name)) {
-          const opt = document.createElement('option');
-          opt.value = name;
-          dl.appendChild(opt);
+        // Простая валидация
+        if (value.length === 0) { alert('Название не может быть пустым.'); return; }
+        if (value.length > 30) { alert('Максимум 30 символов.'); return; }
+        // При желании можно ограничить набор символов (раскомментируйте):
+        // if (!/^[\w\s\-+()./]+$/u.test(value)) { alert('Недопустимые символы.'); return; }
+
+        // Добавим в список (без дубликатов, нечувствительно к регистру)
+        if (!optionExists(value)) {
+          const opt = new Option(value, value);
+
+          // Вставим по алфавиту (красиво)
+          let inserted = false;
+          for (let i = 0; i < select.options.length; i++) {
+            const o = select.options[i];
+            if (o.value && o.value.localeCompare(value, undefined, {sensitivity:'base'}) > 0) {
+              select.add(opt, i);
+              inserted = true;
+              break;
+            }
+          }
+          if (!inserted) select.add(opt);
         }
+
+        // Выберем добавленную модель
+        select.value = value;
+        select.dispatchEvent(new Event('change'));
       });
     });
     </script>
+
     <!-- Дата выпуска -->
     <div class="col-md-4">
       <label class="form-label">Дата выпуска</label>
