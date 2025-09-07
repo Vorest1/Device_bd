@@ -43,7 +43,7 @@
           {% set add_href = url_for('add_category', next=request.full_path) %}
         {% elif t in ['manufacturers','manufacturer'] %}
           {% set add_href = url_for('add_manufacturer', next=request.full_path) %}
-        {% elif t in ['os','operating_systems','os_name'] %}
+        {% elif t in ['os','operating_systems'] %}
           {% set add_href = url_for('add_os', next=request.full_path) %}
         {% endif %}
         <a class="btn btn-success" href="{{ add_href }}">+ Добавить запись</a>

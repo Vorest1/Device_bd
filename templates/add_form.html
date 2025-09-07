@@ -1,6 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
 
+{# Словарь русских названий таблиц #}
+{% set RU_TABLES = {
+  'devices': 'Устройства',
+  'categories': 'Категории',
+  'manufacturers': 'Производители',
+  'retailers': 'Продавцы',
+  'color': 'Цвета',
+  'country': 'Страны',
+  'os_name': 'Названия ОС',
+  'operating_systems': 'Операционные системы',
+  'proc_model': 'Модели процессоров',
+  'storage_type': 'Типы накопителей',
+  'techn_matr': 'Типы матрицы дисплея',
+  'displays': 'Дисплеи',
+  'cameras': 'Камеры',
+  'batteries': 'Батареи',
+  'specifications': 'Спецификации',
+  'device_retailers': 'Предложения продавцов',
+  'users': 'Пользователи'
+} %}
 
 {# Словарь русских подписей для типовых колонок #}
 {% set RU_LABELS = {
@@ -47,7 +67,9 @@
   'estimated_life_hours': 'Время работы (ч)'
 } %}
 
-<h2 class="mb-3">Добавить запись в «{{ table }}»</h2>
+{% set table_ru = RU_TABLES.get(table|lower, table) %}
+
+<h2 class="mb-3">Добавить запись в «{{ table_ru }}»</h2>
 
 <form method="POST" class="row g-3">
   {% for col in columns %}
@@ -58,32 +80,28 @@
       <div class="invalid-feedback">Заполните поле «{{ label }}».</div>
     </div>
   {% endfor %}
-  
-  <input type="hidden" name="next_url" value="{{ next_url }}">
 
-  <input type="hidden" name="embedded"
-       value="{{ 1 if (request.args.get('embedded') or request.form.get('embedded')) else '' }}">
+  <input type="hidden" name="next_url" value="{{ next_url or request.args.get('next') or '' }}">
+  <input type="hidden" name="embedded" value="{{ 1 if (request.args.get('embedded') or request.form.get('embedded')) else '' }}">
 
   <div class="col-12 d-flex gap-2 justify-content-end mt-2">
-    <a id="back-btn" 
-        class="btn btn-outline-secondary" 
-        href="{{ next_url or '#' }}">Назад</a>
-        <script>
-        document.addEventListener('DOMContentLoaded', () => {
+    <a id="back-btn" class="btn btn-outline-secondary" href="{{ next_url or '#' }}">Назад</a>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
         const back = document.getElementById('back-btn');
         back?.addEventListener('click', (e) => {
-            e.preventDefault();
-            const href = back.getAttribute('href') || '';
-            if (href) {
+          e.preventDefault();
+          const href = back.getAttribute('href') || '';
+          if (href) {
             const url = href.includes('embedded=') ? href
-                        : href + (href.includes('?') ? '&' : '?') + 'embedded=1';
-            location.replace(url); // ← без добавления в историю
-            } else {
+                      : href + (href.includes('?') ? '&' : '?') + 'embedded=1';
+            location.replace(url);
+          } else {
             location.replace('{{ url_for("index") }}');
-            }
+          }
         });
-        });
-        </script>
+      });
+    </script>
     <button type="submit" class="btn btn-success">Добавить</button>
   </div>
 </form>
@@ -93,21 +111,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const back = document.getElementById('back-btn');
   back.addEventListener('click', (e) => {
     e.preventDefault();
-
-    // 1) Если мы пришли сюда со страницы внутри сайта — чисто назад в истории
     const hasRef = !!document.referrer && new URL(document.referrer).origin === location.origin;
-    if (hasRef && history.length > 1) {
-      history.back();
-      return;
-    }
-
-    // 2) Иначе — fallback: жёсткий переход на next_url (без добавления в историю)
+    if (hasRef && history.length > 1) { history.back(); return; }
     const nextUrl = back.getAttribute('href');
-    if (nextUrl && nextUrl !== '#') {
-      location.replace(nextUrl); // именно replace, чтобы не плодить историю
-    } else {
-      location.replace('{{ url_for("index") }}');
-    }
+    if (nextUrl && nextUrl !== '#') { location.replace(nextUrl); }
+    else { location.replace('{{ url_for("index") }}'); }
   });
 });
 </script>

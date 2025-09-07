@@ -60,7 +60,74 @@
   </div>
 </div>
 
-<h2>Дополнительные характеристики устройства</h2>
+<div class="d-flex align-items-center justify-content-between mb-2">
+  <h2 >Дополнительные характеристики устройства</h2>
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="prefillFromModelBtn">
+      Заполнить как у последнего по модели
+    </button>
+  
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('prefillFromModelBtn');
+      if (!btn) return;
+
+      // /device/<id>/extras или /device/<id>/extras/
+      const m = location.pathname.match(/\/device\/(\d+)\/extras\/?$/) || location.pathname.match(/\/device\/(\d+)\/extras/);
+
+      btn.addEventListener('click', async () => {
+        try{
+          const devId = m ? m[1] : null;
+          if (!devId) { alert('Не удалось определить device_id из URL'); return; }
+
+          // НОВЫЙ URL
+          const res = await fetch(`/api/model_prefill?device_id=${devId}`, { credentials: 'same-origin' });
+          if (!res.ok) { alert('API недоступно ('+res.status+')'); return; }
+
+          const data = await res.json();
+          if (!data.ok || !data.scalars || Object.keys(data.scalars).length === 0) {
+            alert('Для этой модели нет сохранённых примеров характеристик.');
+            return;
+          }
+
+          const scalars = data.scalars;
+
+          // Подстановка значений по всем вкладкам
+          function applyToForm(form, dict){
+            if (!form) return;
+            for (const [name, val] of Object.entries(dict)) {
+              const el = form.querySelector(`[name="${name}"]`);
+              if (!el) continue;
+              if (el.type === 'checkbox') {
+                el.checked = !!val;
+              } else if (el.tagName === 'SELECT') {
+                const str = String(val);
+                const has = Array.from(el.options).some(o => String(o.value) === str);
+                if (has) el.value = str;
+              } else {
+                el.value = (val ?? '');
+              }
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }
+
+          document.querySelectorAll('.tab-pane form').forEach(form => applyToForm(form, scalars));
+
+          // Визуальный отклик
+          btn.classList.remove('btn-outline-secondary'); btn.classList.add('btn-success');
+          const old = btn.textContent;
+          btn.textContent = 'Заполнено ✔';
+          setTimeout(() => { btn.classList.remove('btn-success'); btn.classList.add('btn-outline-secondary'); btn.textContent = old; }, 2000);
+
+        }catch(e){
+          console.error(e);
+          alert('Ошибка предзаполнения (см. консоль)');
+        }
+      });
+    });
+    </script>
+
+
+</div>
 <ul class="nav nav-tabs mb-3" id="extrasTabs" role="tablist">
   <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#specification">Память</button></li>
   <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#display">Дисплей</button></li>

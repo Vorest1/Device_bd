@@ -1,299 +1,539 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Добавление устройства</h2>
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for cat, msg in messages %}
-        <div class="alert alert-{{ cat }}">{{ msg }}</div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
 
-  <form method="POST" class="row g-3">
-    <!-- Производитель -->
-    <div class="col-md-4">
-      <label class="form-label">Производитель</label>
-      <div class="input-group">
-        <select class="form-select" name="manufacturer_id" required>
-          <option value="" disabled selected>Выберите...</option>
-          {% for m in manufacturers %}
-            <option value="{{ m[0] }}">{{ m[1] }}</option>
-          {% endfor %}
-        </select>
-        <a href="{{ url_for('add_manufacturer', next=request.path) }}" class="btn btn-outline-secondary" title="Добавить нового производителя">+</a>
-      </div>
+<h2 class="mb-3">Добавить устройство</h2>
+<p class="text-muted">Блок «Дополнительные характеристики» — необязателен.</p>
+
+<style>
+  .section-card{ border:1px solid rgba(0,0,0,.08); border-radius:.8rem; padding:1rem; margin-top:1rem; }
+  .section-title{ display:flex; align-items:center; gap:.5rem; margin-bottom:.75rem; }
+  .section-title code{ background:rgba(0,0,0,.04); padding:.1rem .35rem; border-radius:.4rem; }
+  .input-group .form-select{ flex:1 1 auto; min-width:10rem; }
+  .btn-plus{ min-width:2.5rem; }
+</style>
+
+<form id="deviceForm" method="POST" class="row g-3 needs-validation" novalidate autocomplete="off">
+
+  <!-- ===== ОСНОВНЫЕ ПОЛЯ ===== -->
+  <div class="col-md-6 col-lg-4">
+    <label class="form-label">Производитель</label>
+    <div class="input-group">
+      <select class="form-select" name="manufacturer_id" required>
+        <option value="" disabled selected>Выберите...</option>
+        {% for m in manufacturers %}
+          <option value="{{ m[0] }}">{{ m[1] }}</option>
+        {% endfor %}
+      </select>
+      <a class="btn btn-outline-secondary btn-plus"
+         title="Добавить производителя"
+         href="{{ url_for('add_manufacturer', next=url_for('add_device', back=1)) }}">+</a>
+      <div class="invalid-feedback">Выберите производителя.</div>
     </div>
-    <!-- Категория -->
-    <div class="col-md-4">
-      <label class="form-label">Категория</label>
-      <div class="input-group">
-        <select class="form-select" name="category_id" required>
-          <option value="" disabled selected>Выберите...</option>
-          {% for c in categories %}
-            <option value="{{ c[0] }}">{{ c[1] }}</option>
-          {% endfor %}
-        </select>
-        <a href="{{ url_for('add_category', next=request.path) }}" class="btn btn-outline-secondary" title="Добавить новую категорию">+</a>
-      </div>
+  </div>
+
+  <div class="col-md-6 col-lg-4">
+    <label class="form-label">Категория</label>
+    <div class="input-group">
+      <select class="form-select" name="category_id" required>
+        <option value="" disabled selected>Выберите...</option>
+        {% for c in categories %}
+          <option value="{{ c[0] }}">{{ c[1] }}</option>
+        {% endfor %}
+      </select>
+      <a class="btn btn-outline-secondary btn-plus"
+         title="Добавить категорию"
+         href="{{ url_for('add_category', next=url_for('add_device', back=1)) }}">+</a>
+      <div class="invalid-feedback">Выберите категорию.</div>
     </div>
-    <!-- Операционная система -->
-    <div class="col-md-4">
-      <label class="form-label">Операционная система</label>
-      <div class="input-group">
-        <select class="form-select" name="os_id" required>
-          <option value="" disabled selected>Выберите...</option>
-          {% for os in operating_systems %}
-            <option value="{{ os[0] }}">{{ os[1] }} ({{ os[2] }})</option>
-          {% endfor %}
-        </select>
-        <a href="{{ url_for('add_os', next=request.path) }}" class="btn btn-outline-secondary" title="Добавить ОС">+</a>
-      </div>
+  </div>
+
+  <div class="col-md-12 col-lg-4">
+    <label class="form-label">Модель</label>
+    <div class="input-group">
+      <select class="form-select" name="model_id" id="model_id" required>
+        <option value="" disabled selected>Выберите...</option>
+        {% for m in models %}
+          <option value="{{ m[0] }}">{{ m[1] }}</option>
+        {% endfor %}
+      </select>
+      <!-- если есть свой add_model — замени на него -->
+      <a class="btn btn-outline-secondary btn-plus"
+         title="Добавить модель"
+         href="{{ url_for('add_row', table_name='model', next=url_for('add_device', back=1)) }}">+</a>
+      <div class="invalid-feedback">Выберите модель.</div>
     </div>
-    <!-- Модель -->
-    <div class="col-md-4">
-      <label class="form-label">Модель</label>
-      <div class="input-group">
-        <!-- инпут с подсказками из datalist -->
-        <select class="form-select" name="model" id="modelSelect" required>
-          <option value="" selected disabled>Выберите модель...</option>
-          {% for name in models %}
-            <option value="{{ name }}">{{ name }}</option>
-          {% endfor %}
-        </select>
+  </div>
 
-        <!-- Кнопка «+» как у категории -->
-        <button type="button"
-                class="btn btn-outline-secondary"
-                id="addModelBtn"
-                title="Добавить новую модель">
-          +
-        </button>
-      </div>
-      <div class="form-text">
-        Выберите из списка существующих моделей или добавьте новую через «+».
-      </div>
+  <div class="col-md-6 col-lg-4">
+    <label class="form-label">ОС (название — версия)</label>
+    <div class="input-group">
+      <select class="form-select" name="os_id" required>
+        <option value="" disabled selected>Выберите...</option>
+        {% for os in operating_systems %}
+          <option value="{{ os[0] }}">{{ os[1] }} — {{ os[2] }}</option>
+        {% endfor %}
+      </select>
+      <a class="btn btn-outline-secondary btn-plus"
+         title="Добавить ОС"
+         href="{{ url_for('add_os', next=url_for('add_device', back=1)) }}">+</a>
+      <div class="invalid-feedback">Выберите ОС.</div>
     </div>
+  </div>
 
-    <script>
-    document.addEventListener('DOMContentLoaded', function(){
-      const addBtn = document.getElementById('addModelBtn');
-      const select = document.getElementById('modelSelect');
-      if (!addBtn || !select) return;
-
-      function optionExists(val){
-        const v = (val||'').trim().toLowerCase();
-        return Array.from(select.options).some(o => o.value.trim().toLowerCase() === v);
-      }
-
-      addBtn.addEventListener('click', () => {
-        const current = select.value || '';
-        const name = prompt('Введите название модели', current);
-        if (!name) return;
-
-        const value = name.trim();
-
-        // Простая валидация
-        if (value.length === 0) { alert('Название не может быть пустым.'); return; }
-        if (value.length > 30) { alert('Максимум 30 символов.'); return; }
-        // При желании можно ограничить набор символов (раскомментируйте):
-        // if (!/^[\w\s\-+()./]+$/u.test(value)) { alert('Недопустимые символы.'); return; }
-
-        // Добавим в список (без дубликатов, нечувствительно к регистру)
-        if (!optionExists(value)) {
-          const opt = new Option(value, value);
-
-          // Вставим по алфавиту (красиво)
-          let inserted = false;
-          for (let i = 0; i < select.options.length; i++) {
-            const o = select.options[i];
-            if (o.value && o.value.localeCompare(value, undefined, {sensitivity:'base'}) > 0) {
-              select.add(opt, i);
-              inserted = true;
-              break;
-            }
-          }
-          if (!inserted) select.add(opt);
-        }
-
-        // Выберем добавленную модель
-        select.value = value;
-        select.dispatchEvent(new Event('change'));
-      });
-    });
-    </script>
-
-    <!-- Дата выпуска -->
-    <div class="col-md-4">
-      <label class="form-label">Дата выпуска</label>
-      <input type="date" class="form-control" name="release_date"
-             min="1990-01-01"  max="{{ today }}" required>
-    </div>
-    <!-- Текущая стоимость -->
-    <div class="col-md-4">
-      <label class="form-label">Текущая стоимость (₽)</label>
-      <input type="number" class="form-control" name="current_price"
-             step="0.01" min="0" max="1000000" required>
-    </div>
-    <!-- Вес -->
-    <div class="col-md-4">
-      <label class="form-label">Вес (грамм)</label>
-      <input type="number" class="form-control" name="weight_grams"
-             min="1" max="1000000" required>
-    </div>
-    <!-- Цвет -->
-    <div class="col-md-4">
+  <div class="col-md-6 col-lg-4">
     <label class="form-label">Цвет</label>
     <div class="input-group">
       <select class="form-select" name="color_id" required>
         <option value="" disabled selected>Выберите...</option>
-        {% for c in colors %}
-          <option value="{{ c[0] }}">{{ c[1] }}</option>
+        {% for col in colors %}
+          <option value="{{ col[0] }}">{{ col[1] }}</option>
         {% endfor %}
       </select>
-      <!-- НОВОЕ: плюс для добавления цвета -->
-      <a href="{{ url_for('add_row', table_name='color', next=request.path) }}"
-        class="btn btn-outline-secondary"
-        title="Добавить цвет">+</a>
+      <!-- если есть свой add_color — замени на него -->
+      <a class="btn btn-outline-secondary btn-plus"
+         title="Добавить цвет"
+         href="{{ url_for('add_row', table_name='color', next=url_for('add_device', back=1)) }}">+</a>
+      <div class="invalid-feedback">Выберите цвет.</div>
     </div>
   </div>
-    <!-- Гарантия -->
-    <div class="col-md-4">
-      <label class="form-label">Гарантия (мес)</label>
-      <input type="number" class="form-control" name="warranty_months"
-             min="1" max="24" required>
+
+  <div class="col-md-6 col-lg-4">
+    <label class="form-label">Дата выпуска</label>
+    <input type="date" class="form-control" name="release_date" min="{{ min_date }}" max="{{ today }}" required>
+    <div class="invalid-feedback">Укажите дату {{ min_date }}…{{ today }}.</div>
+  </div>
+
+  <div class="col-md-4 col-lg-3">
+    <label class="form-label">Цена (₽)</label>
+    <input type="number" class="form-control" name="current_price" min="0" step="1" required placeholder="напр., 24990">
+    <div class="invalid-feedback">Укажите цену (целое число).</div>
+  </div>
+
+  <div class="col-md-4 col-lg-3">
+    <label class="form-label">Вес (г)</label>
+    <input type="number" class="form-control" name="weight_grams" min="0" step="1" required placeholder="напр., 195">
+    <div class="invalid-feedback">Укажите вес (целое число).</div>
+  </div>
+
+  <div class="col-md-4 col-lg-3">
+    <label class="form-label">Гарантия (мес)</label>
+    <input type="number" class="form-control" name="warranty_months" min="0" step="1" required placeholder="напр., 24">
+    <div class="invalid-feedback">Укажите гарантию (целое число).</div>
+  </div>
+
+  <div class="col-md-4 col-lg-3">
+    <label class="form-label d-block">Водонепроницаемость</label>
+    <div class="form-check mt-2">
+      <input class="form-check-input" type="checkbox" name="is_waterproof" id="is_waterproof">
+      <label class="form-check-label" for="is_waterproof">Да</label>
     </div>
-    <!-- Водонепроницаемость -->
-    <div class="col-md-4">
-      <label class="form-label">Водонепроницаемость</label>
-      <div class="form-check mt-2">
-        <input class="form-check-input" type="checkbox" name="is_waterproof" id="waterproof">
-        <label class="form-check-label" for="waterproof">Есть</label>
+  </div>
+
+  <!-- ===== ДОП. ХАРАКТЕРИСТИКИ ===== -->
+  <div class="col-12"><hr class="my-2"></div>
+  <div class="col-12 d-flex align-items-center gap-2 mt-2 mb-1">
+    <h5 class="mb-0">Дополнительные характеристики</h5>
+    <button type="button" id="prefillBtn" class="btn btn-sm btn-outline-primary ms-2"
+            title="Заполнить доп. характеристики как у последнего устройства выбранной модели">
+      Заполнить по модели
+    </button>
+    <span class="text-muted small ms-2">(необязательно)</span>
+  </div>
+
+  <!-- Спецификация -->
+  <div class="col-12 section-card">
+    <div class="section-title">
+      <strong>Спецификация</strong><small class="text-muted">таблица</small><code>specifications</code>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-6 col-lg-4">
+        <label class="form-label">Модель процессора</label>
+        <div class="input-group">
+          <select class="form-select" name="proc_model_id">
+            <option value="" selected>Не выбрано</option>
+            {% for pm in proc_models %}
+              <option value="{{ pm[0] }}">{{ pm[1] }}</option>
+            {% endfor %}
+          </select>
+          <!-- если есть свой add_proc_model — замени на него -->
+          <a class="btn btn-outline-secondary btn-plus"
+             title="Добавить модель процессора"
+             href="{{ url_for('add_row', table_name='proc_model', next=url_for('add_device', back=1)) }}">+</a>
+        </div>
+      </div>
+      <div class="col-md-3 col-lg-2">
+        <label class="form-label">Ядер</label>
+        <input type="number" class="form-control" name="processor_cores" min="1" max="20" placeholder="напр., 8">
+      </div>
+      <div class="col-md-3 col-lg-2">
+        <label class="form-label">RAM (Гб)</label>
+        <input type="number" class="form-control" name="ram_gb" min="1" max="32" placeholder="напр., 8">
+      </div>
+      <div class="col-md-3 col-lg-2">
+        <label class="form-label">Память (Гб)</label>
+        <input type="number" class="form-control" name="storage_gb" min="1" max="2048" placeholder="напр., 256">
+      </div>
+      <div class="col-md-6 col-lg-2">
+        <label class="form-label">Тип накопителя</label>
+        <div class="input-group">
+          <select class="form-select" name="storage_type_id">
+            <option value="" selected>Не выбрано</option>
+            {% for st in storage_types %}
+              <option value="{{ st[0] }}">{{ st[1] }}</option>
+            {% endfor %}
+          </select>
+          <!-- если есть свой add_storage_type — замени -->
+          <a class="btn btn-outline-secondary btn-plus"
+             title="Добавить тип накопителя"
+             href="{{ url_for('add_row', table_name='storage_type', next=url_for('add_device', back=1)) }}">+</a>
+        </div>
       </div>
     </div>
+  </div>
 
-    <hr>
-    <!-- Перенесено: формы продавцов теперь на вкладке «Продавцы» (edit_extras) -->
-    <div class="col-12 d-flex justify-content-end">
-      <button type="submit" class="btn btn-success mt-3">Добавить устройство</button>
+  <!-- Дисплей -->
+  <div class="col-12 section-card">
+    <div class="section-title">
+      <strong>Дисплей</strong><small class="text-muted">таблица</small><code>displays</code>
     </div>
-  </form>
+    <div class="row g-3">
+      <div class="col-md-3 col-lg-2">
+        <label class="form-label">Диагональ (″)</label>
+        <input type="number" step="0.1" class="form-control" name="diagonal_inches" min="1.0" max="100.0" placeholder="6.1">
+      </div>
+      <div class="col-md-5 col-lg-3">
+        <label class="form-label">Разрешение</label>
+        <input type="text" class="form-control" name="resolution"
+               minlength="7" maxlength="11"
+               pattern="^\s*\d{3,5}\s*[xX×*]\s*\d{3,5}\s*$"
+               title="Формат: ширина×высота, напр. 2400x1080"
+               placeholder="2400x1080">
+      </div>
+      <div class="col-md-4 col-lg-3">
+        <label class="form-label">Технология матрицы</label>
+        <div class="input-group">
+          <select class="form-select" name="techn_matr_id">
+            <option value="" selected>Не выбрано</option>
+            {% for tm in techn_matrices %}
+              <option value="{{ tm[0] }}">{{ tm[1] }}</option>
+            {% endfor %}
+          </select>
+          <!-- если есть свой add_techn_matr — замени -->
+          <a class="btn btn-outline-secondary btn-plus"
+             title="Добавить технологию матрицы"
+             href="{{ url_for('add_row', table_name='techn_matr', next=url_for('add_device', back=1)) }}">+</a>
+        </div>
+      </div>
+      <div class="col-md-3 col-lg-2">
+        <label class="form-label">Частота (Гц)</label>
+        <input type="number" class="form-control" name="refresh_rate_hz" min="1" max="360" placeholder="120">
+      </div>
+      <div class="col-md-3 col-lg-2">
+        <label class="form-label">Яркость (нит)</label>
+        <input type="number" class="form-control" name="brightness_nits" min="1" max="10000" placeholder="800">
+      </div>
+    </div>
+  </div>
 
-  <script>
-document.addEventListener('DOMContentLoaded', () => {
-  const FORM = document.querySelector('form');
-  if (!FORM) return;
+  <!-- Камера -->
+  <div class="col-12 section-card">
+    <div class="section-title">
+      <strong>Камера</strong><small class="text-muted">таблица</small><code>cameras</code>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-3 col-lg-2">
+        <label class="form-label">Мпикс</label>
+        <input type="number" step="0.1" class="form-control" name="megapixels_main" min="2.0" max="200.0" placeholder="12.0">
+      </div>
+      <div class="col-md-4 col-lg-3">
+        <label class="form-label">Диафрагма</label>
+        <div class="input-group">
+          <select class="form-select" name="aperture_main" id="apertureSelect">
+            <option value="" selected>Не выбрано</option>
+            {% for v in aperture_main %}
+              {% set a = v %}
+              {% if a and not a.startswith('F') %}{% set a = 'F' ~ a %}{% endif %}
+              <option value="{{ a }}">{{ a }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" class="btn btn-outline-secondary btn-plus" id="addApertureBtn" title="Добавить значение диафрагмы">+</button>
+        </div>
+        <div class="form-text">Формат F1.8, F2.0 и т.п.</div>
+      </div>
+      <div class="col-md-3 col-lg-2">
+        <label class="form-label">Зум (×)</label>
+        <input type="number" step="0.1" class="form-control" name="optical_zoom_x" min="0.0" max="144.0" placeholder="3.0">
+      </div>
+      <div class="col-md-5 col-lg-3">
+        <label class="form-label">Видео</label>
+        <input type="text" class="form-control" name="video_resolution"
+               minlength="7" maxlength="11"
+               pattern="^\s*\d{3,5}\s*[xX×*]\s*\d{3,5}\s*$"
+               title="Формат: ширина×высота, напр. 3840x2160"
+               placeholder="3840x2160">
+      </div>
+      <div class="col-md-3 col-lg-2">
+        <label class="form-label d-block">ИИ-улучшение</label>
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" name="has_ai_enhance" id="has_ai_enhance">
+          <label class="form-check-label" for="has_ai_enhance">Да</label>
+        </div>
+      </div>
+    </div>
+  </div>
 
-  const KEY = 'addDeviceForm:v3';
+  <!-- Батарея -->
+  <div class="col-12 section-card">
+    <div class="section-title">
+      <strong>Батарея</strong><small class="text-muted">таблица</small><code>batteries</code>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-3 col-lg-3">
+        <label class="form-label">Ёмкость (мАч)</label>
+        <input type="number" class="form-control" name="capacity_mah" min="1" max="20000" placeholder="5000">
+      </div>
+      <div class="col-md-3 col-lg-3">
+        <label class="form-label">Быстрая зарядка (Вт)</label>
+        <input type="number" step="0.1" class="form-control" name="fast_charging_w" min="0.0" max="20.0" placeholder="10.0">
+      </div>
+      <div class="col-md-3 col-lg-3">
+        <label class="form-label d-block">Беспроводная зарядка</label>
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" name="wireless_charging" id="wireless_charging">
+          <label class="form-check-label" for="wireless_charging">Да</label>
+        </div>
+      </div>
+      <div class="col-md-3 col-lg-3">
+        <label class="form-label">Время работы (ч)</label>
+        <input type="number" step="0.1" class="form-control" name="estimated_life_hours" min="0.0" max="96.0" placeholder="24.0">
+      </div>
+    </div>
+  </div>
 
-  // ---------- restore ----------
-  (function restore() {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return;
-    let data;
-    try { data = JSON.parse(raw); } catch { localStorage.removeItem(KEY); return; }
+  <!-- Продавец -->
+  <div class="col-12 section-card">
+    <div class="section-title">
+      <strong>Предложение продавца</strong><small class="text-muted">таблица</small><code>device_retailers</code>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-6 col-lg-4">
+        <label class="form-label">Продавец</label>
+        <div class="input-group">
+          <select class="form-select" name="retailer_id">
+            <option value="" selected>Не выбрано</option>
+            {% for r in retailers %}
+              <option value="{{ r[0] }}">{{ r[1] }}</option>
+            {% endfor %}
+          </select>
+          <a class="btn btn-outline-secondary btn-plus"
+             title="Добавить продавца"
+             href="{{ url_for('add_retailer', next=url_for('add_device', back=1)) }}">+</a>
+        </div>
+      </div>
+      <div class="col-md-4 col-lg-3">
+        <label class="form-label">Цена у продавца (₽)</label>
+        <input type="number" class="form-control" name="site_price" min="0" max="1000000" step="0.01" placeholder="24990.00">
+      </div>
+      <div class="col-md-2 col-lg-2">
+        <label class="form-label d-block">В наличии</label>
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" name="in_stock" id="in_stock_offer">
+          <label class="form-check-label" for="in_stock_offer">Да</label>
+        </div>
+      </div>
+      <div class="col-md-4 col-lg-3">
+        <label class="form-label">Обновлено</label>
+        <input type="date" class="form-control" name="last_updated" min="2016-01-01" max="{{ today }}" value="{{ today }}">
+      </div>
+    </div>
+    <div class="form-text">Если заполнить продавца и цену — предложение будет создано вместе с устройством.</div>
+  </div>
 
-    // 1) Обычные поля (все [name], кроме массивов name="...[]")
-    FORM.querySelectorAll('[name]:not([name$="[]"])').forEach(el => {
-      if (!(el.name in data.scalars)) return;
-      if (el.type === 'checkbox' || el.type === 'radio') {
-        el.checked = !!data.scalars[el.name];
+  <div class="col-12 d-flex justify-content-end gap-2 mt-3">
+    <a href="{{ url_for('tables_list') }}" class="btn btn-outline-secondary" data-clear-draft="1">Отмена</a>
+    <button type="submit" class="btn btn-success">Сохранить устройство</button>
+  </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const form = document.getElementById('deviceForm');
+  const DRAFT_KEY = 'add_device_draft';
+  const BACK_KEY  = 'add_device_back_flag';
+
+  // ===== draft helpers =====
+  function saveDraft() {
+    if (!form) return;
+    const fd = new FormData(form);
+    const data = {};
+    fd.forEach((v, k) => {
+      if (k in data) {
+        if (!Array.isArray(data[k])) data[k] = [data[k]];
+        data[k].push(v);
       } else {
-        // для <select> — ставим только если значение есть среди опций
-        if (el.tagName === 'SELECT') {
-          const val = String(data.scalars[el.name]);
-          if (Array.from(el.options).some(o => o.value === val)) el.value = val;
-        } else {
-          el.value = data.scalars[el.name];
-        }
+        data[k] = v;
       }
     });
+    // чекбоксы, снятые пользователем
+    form.querySelectorAll('input[type="checkbox"][name]').forEach(cb => {
+      if (!(cb.name in data)) data[cb.name] = false;
+    });
+    try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data)); } catch (e) {}
+  }
+  function loadDraft() {
+    let raw = null;
+    try { raw = sessionStorage.getItem(DRAFT_KEY); } catch (e) {}
+    if (!raw) return;
+    let data; try { data = JSON.parse(raw); } catch (e) { return; }
 
-    // 2) Динамические массивы продавцов (если такие элементы есть на странице)
-    const arrays = data.arrays || {};
-    const blocks = () => document.querySelectorAll('.retailer-block');
-    const addBtn = document.getElementById('add-retailer-btn');
-
-    if (arrays['retailer_id[]'] || arrays['site_price[]'] || arrays['last_updated[]']) {
-      const need = Math.max(
-        arrays['retailer_id[]']?.length || 0,
-        arrays['site_price[]']?.length  || 0,
-        arrays['last_updated[]']?.length|| 0
-      );
-      if (need > blocks().length && addBtn) {
-        for (let i = blocks().length; i < need; i++) addBtn.click();
-      }
-      const blks = blocks();
-      for (let i = 0; i < need && i < blks.length; i++) {
-        const b = blks[i];
-        const set = (sel, val) => { const el = b.querySelector(sel); if (!el) return;
-          if (el.tagName === 'SELECT') {
-            if (Array.from(el.options).some(o => o.value == val)) el.value = val;
-          } else { el.value = val; }
-        };
-        if (arrays['retailer_id[]']) set('[name="retailer_id[]"]', arrays['retailer_id[]'][i] ?? '');
-        if (arrays['site_price[]'])  set('[name="site_price[]"]',  arrays['site_price[]'][i]  ?? '');
-        if (arrays['last_updated[]'])set('[name="last_updated[]"]',arrays['last_updated[]'][i]?? '');
-        // чекбокс наличия
-        const ch = b.querySelector('[type="checkbox"]');
-        if (ch && Object.prototype.hasOwnProperty.call(data.checks, 'in_stock'+i)) {
-          ch.checked = !!data.checks['in_stock'+i];
+    for (const [name, value] of Object.entries(data)) {
+      const els = form.querySelectorAll(`[name="${CSS.escape(name)}"]`);
+      els.forEach(el => {
+        const tag = el.tagName.toLowerCase();
+        if (el.type === 'checkbox') {
+          el.checked = (value === true || value === 'on' || value === '1');
+        } else if (tag === 'select') {
+          if (Array.isArray(value)) {
+            Array.from(el.options).forEach(o => o.selected = value.includes(o.value));
+          } else {
+            el.value = value;
+          }
+        } else {
+          el.value = Array.isArray(value) ? value[value.length - 1] : value;
         }
+      });
+    }
+  }
+  function clearDraftAndFlag() {
+    try { sessionStorage.removeItem(DRAFT_KEY); } catch (e) {}
+    try { sessionStorage.removeItem(BACK_KEY); } catch (e) {}
+  }
+
+  // ===== при загрузке: восстановить, только если это возврат со страниц «плюсиков» =====
+  const params = new URLSearchParams(location.search);
+  const backParam = params.has('back');                // есть ?back=1 в URL
+  const backFlag  = sessionStorage.getItem(BACK_KEY) === '1'; // страховка
+
+  if (backParam || backFlag) {
+    loadDraft();
+    try { sessionStorage.removeItem(BACK_KEY); } catch (e) {}
+  } else {
+    // новое добавление — всё чистим
+    clearDraftAndFlag();
+    form.reset();
+  }
+
+  // ===== Bootstrap-валидация =====
+  form.addEventListener('submit', function (e) {
+    if (!form.checkValidity()) {
+      e.preventDefault(); e.stopPropagation();
+      form.classList.add('was-validated');
+      saveDraft(); // не уходим — сохраним
+    } else {
+      // отправляем — черновик больше не нужен
+      clearDraftAndFlag();
+    }
+  });
+
+  // «Отмена» — чистим черновик и флаг
+  document.querySelectorAll('[data-clear-draft="1"]').forEach(a => {
+    a.addEventListener('click', clearDraftAndFlag);
+  });
+
+  // При клике на любой «+»: ставим флаг возврата и сохраняем черновик
+  document.querySelectorAll('a[href*="/add_"], a[href*="/add/"]').forEach(a => {
+    a.addEventListener('click', () => {
+      try { sessionStorage.setItem(BACK_KEY, '1'); } catch (e) {}
+      saveDraft();
+    });
+  });
+
+  // ===== Диафрагма (добавление своего значения) =====
+  const apertureSelect = document.getElementById('apertureSelect');
+  const addApertureBtn = document.getElementById('addApertureBtn');
+  function normalize(val){
+    let v = (val || '').trim().toUpperCase().replace(',', '.');
+    v = v.replace(/^F\s*/,'F');
+    if (/^\d{1,2}\.\d$/.test(v)) v = 'F' + v;
+    return v;
+  }
+  function isValid(v){ return /^F\d{1,2}\.\d$/.test(v); }
+  function hasOption(v){
+    const vv = v.trim().toLowerCase();
+    return Array.from(apertureSelect?.options || []).some(o => (o.value || '').trim().toLowerCase() === vv);
+  }
+  function insertSorted(value){
+    const opt = new Option(value, value);
+    let inserted = false;
+    for (let i = 1; i < (apertureSelect?.options.length || 0); i++) {
+      const o = apertureSelect.options[i];
+      if (o.value.localeCompare(value, undefined, {sensitivity:'base'}) > 0) {
+        apertureSelect.add(opt, i); inserted = true; break;
       }
     }
-
-    // одноразовое восстановление
-    localStorage.removeItem(KEY);
-  })();
-
-  // ---------- save before leaving to any dict "plus" link ----------
-  function isDictAddLink(a) {
-    if (!a || a.tagName !== 'A') return false;
-    if (a.classList.contains('dict-add-btn')) return true; // если добавите класс — будет надёжнее
-    const href = a.getAttribute('href') || '';
-    // покрываем add_manufacturer, add_category, add_os, add_retailer, add_row?table_name=...
-    return /\/add_/.test(href) || href.includes('add_row') || href.includes('table_name=');
+    if (!inserted) apertureSelect?.add(opt);
   }
+  addApertureBtn?.addEventListener('click', () => {
+    const suggested = apertureSelect?.value || 'F1.8';
+    let name = prompt('Введите значение диафрагмы (например, F1.8)', suggested);
+    if (!name) return;
+    name = normalize(name);
+    if (!isValid(name)) { alert('Неверный формат. Пример: F1.8'); return; }
+    if (!hasOption(name)) insertSorted(name);
+    if (apertureSelect) apertureSelect.value = name;
+    saveDraft();
+  });
 
-  function collectData() {
-    const scalars = {};
-    const arrays  = {};
-    const checks  = {};
-
-    // обычные поля
-    FORM.querySelectorAll('[name]:not([name$="[]"])').forEach(el => {
-      if (el.type === 'checkbox' || el.type === 'radio') {
-        scalars[el.name] = !!el.checked;
-      } else {
-        scalars[el.name] = el.value;
+  // ===== «Заполнить по модели» =====
+  document.getElementById('prefillBtn')?.addEventListener('click', async () => {
+    const mid = document.getElementById('model_id')?.value;
+    if (!mid) { alert('Сначала выберите модель.'); return; }
+    try{
+      const res = await fetch(`/api/last_specs?model_id=${encodeURIComponent(mid)}`, { credentials:'same-origin' });
+      if (!res.ok) { alert('API недоступно'); return; }
+      const data = await res.json();
+      const scal = data?.scalars || {};
+      const map = {
+        // spec
+        'proc_model_id': 'proc_model_id',
+        'processor_cores': 'processor_cores',
+        'ram_gb': 'ram_gb',
+        'storage_gb': 'storage_gb',
+        'storage_type_id': 'storage_type_id',
+        // display
+        'diagonal_inches': 'diagonal_inches',
+        'resolution': 'resolution',
+        'techn_matr_id': 'techn_matr_id',
+        'refresh_rate_hz': 'refresh_rate_hz',
+        'brightness_nits': 'brightness_nits',
+        // camera
+        'megapixels_main': 'megapixels_main',
+        'aperture_main': 'aperture_main',
+        'optical_zoom_x': 'optical_zoom_x',
+        'video_resolution': 'video_resolution',
+        'has_ai_enhance': 'has_ai_enhance',
+        // battery
+        'capacity_mah': 'capacity_mah',
+        'fast_charging_w': 'fast_charging_w',
+        'estimated_life_hours': 'estimated_life_hours',
+        'wireless_charging': 'wireless_charging',
+      };
+      for (const [k, name] of Object.entries(map)) {
+        const el = form.querySelector(`[name="${name}"]`);
+        if (!el || !(k in scal)) continue;
+        if (el.type === 'checkbox') el.checked = !!scal[k];
+        else el.value = scal[k];
       }
-    });
+      // после автозаполнения сохраняем черновик
+      saveDraft();
+    }catch(e){
+      console.error(e); alert('Ошибка предзаполнения (см. консоль).');
+    }
+  });
 
-    // массивы (например retailer_id[], site_price[], last_updated[])
-    const arrayNames = new Set(Array.from(FORM.querySelectorAll('[name$="[]"]')).map(el => el.name));
-    arrayNames.forEach(n => {
-      arrays[n] = Array.from(FORM.querySelectorAll(`[name="${n}"]`)).map(el => el.value);
-    });
-
-    // чекбоксы "в наличии" в блоках продавцов (in_stock0, in_stock1, ...)
-    document.querySelectorAll('.retailer-block').forEach((b, idx) => {
-      const ch = b.querySelector('[type="checkbox"]');
-      if (ch) checks['in_stock' + idx] = !!ch.checked;
-    });
-
-    return { scalars, arrays, checks, ts: Date.now() };
-  }
-
-  // Сохраняем при клике на любую «плюсовую» ссылку (делегирование события – работает и для новых ссылок)
-  ['pointerdown', 'click'].forEach(evt =>
-    document.addEventListener(evt, (e) => {
-      const a = e.target.closest('a');
-      if (!isDictAddLink(a)) return;
-      try { localStorage.setItem(KEY, JSON.stringify(collectData())); } catch {}
-    }, true) // capture, чтобы сработало до навигации
-  );
+  // На всякий случай
+  window.addEventListener('beforeunload', saveDraft);
 });
 </script>
-
-
 
 {% endblock %}
