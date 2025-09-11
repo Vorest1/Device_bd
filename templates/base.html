@@ -121,7 +121,17 @@
               <a class="nav-link {% if request.endpoint == 'all_devices' %}active{% endif %}"
                  href="{{ url_for('all_devices') }}">Все устройства</a>
             </li>
+            <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="dbSwitch" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              БД: {{ 'PostgreSQL' if db_backend == 'pg' else 'SQLite' }}
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dbSwitch">
+              <li><a class="dropdown-item {% if db_backend=='pg' %}active{% endif %}" href="{{ url_for('switch_db', backend='pg') }}">PostgreSQL</a></li>
+              <li><a class="dropdown-item {% if db_backend=='sqlite' %}active{% endif %}" href="{{ url_for('switch_db', backend='sqlite') }}">SQLite</a></li>
+            </ul>
+          </li>
           </ul>
+          
 
           <!-- Правый блок: яркая кнопка -->
           <ul class="navbar-nav ms-auto mb-2 mb-lg-0">

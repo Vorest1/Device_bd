@@ -4,11 +4,15 @@ from datetime import date as _Date, datetime as _DT
 from functools import wraps
 from typing import Optional, List, Tuple, Dict, Any
 
+import sys, json
+from contextlib import closing
+
 import psycopg2
 import psycopg2.extras
+import sqlite3
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    jsonify, flash
+    jsonify, flash, session, abort
 )
 from flask_login import (
     LoginManager, UserMixin, login_user, logout_user,
@@ -26,13 +30,43 @@ PG_DSN = os.getenv(
     "PG_DSN",
     "dbname=device_db user=postgres password=admin host=127.0.0.1 port=5432"
 )
+SQLITE_PATH = os.getenv("SQLITE_PATH", os.path.join(os.path.dirname(__file__), "db", "2lr.db"))
+DB_DEFAULT = os.getenv("DB_DEFAULT", "pg")  # "pg" или "sqlite"
 SUPERADMIN_USERNAME = os.getenv("SUPERADMIN_USERNAME", "admin")
 
+def current_backend() -> str:
+    return session.get('DB_BACKEND', DB_DEFAULT)
+
+def backend_name() -> str:
+    return "PostgreSQL" if current_backend() == "pg" else "SQLite"
+
 def get_conn():
-    return psycopg2.connect(PG_DSN)
+    if current_backend() == "pg":
+        return psycopg2.connect(PG_DSN)
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+
+class AnyCursor:
+    """Единый курсор: в SQLite заменяет %s → ?"""
+    def __init__(self, cur, backend: str):
+        self._cur = cur
+        self._backend = backend
+    def execute(self, sql, params=()):
+        if self._backend == "sqlite":
+            sql = sql.replace("%s", "?")
+        return self._cur.execute(sql, params or ())
+    def executemany(self, sql, seq):
+        if self._backend == "sqlite":
+            sql = sql.replace("%s", "?")
+        return self._cur.executemany(sql, seq)
+    def fetchone(self): return self._cur.fetchone()
+    def fetchall(self): return self._cur.fetchall()
+    def __getattr__(self, name): return getattr(self._cur, name)
 
 def tup_cur(conn):
-    return conn.cursor()
+    return AnyCursor(conn.cursor(), "sqlite" if current_backend() == "sqlite" else "pg")
 
 def _sort_ci_tuples(rows, idx=1):
     return sorted(rows, key=lambda r: (str(r[idx]).strip().casefold(), r[idx]))
@@ -40,6 +74,17 @@ def _sort_ci_tuples(rows, idx=1):
 def _sort_ci_dicts(items, key_name="name"):
     return sorted(items, key=lambda x: (str(x.get(key_name, "")).strip().casefold(),
                                         x.get(key_name, "")))
+
+# --------------------------
+# DB helpers (backend-agnostic)
+# --------------------------
+def _is_sqlite_conn(conn) -> bool:
+    """Return True if this is a sqlite3 connection."""
+    return getattr(conn, "__class__", type("X",(object,),{})).__module__.split(".",1)[0] == "sqlite3"
+
+def _ph(conn) -> str:
+    """Parameter placeholder for this connection ('?' for SQLite, '%s' for Postgres)."""
+    return "?" if _is_sqlite_conn(conn) else "%s"
 
 # -------------------------------------------------
 # Flask-Login
@@ -104,26 +149,50 @@ def inject_roles():
 def inject_flags():
     return {'is_admin': (current_user.is_authenticated and getattr(current_user, 'is_admin', False))}
 
+@app.before_request
+def ensure_backend_in_session():
+    if 'DB_BACKEND' not in session:
+        session['DB_BACKEND'] = DB_DEFAULT
+
+@app.context_processor
+def inject_db_backend():
+    return {'db_backend': current_backend(), 'db_backend_name': backend_name()}
+
+
 # -------------------------------------------------
 # Интроспекция БД (PostgreSQL)
 # -------------------------------------------------
 def get_pk_name(conn, table_name: str) -> Optional[str]:
-    sql = """
-    SELECT a.attname
-    FROM pg_index i
-    JOIN pg_class c ON c.oid = i.indrelid
-    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(i.indkey)
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE i.indisprimary = true
-      AND n.nspname = 'public'
-      AND c.relname = %s
-    ORDER BY array_position(i.indkey, a.attnum)
-    LIMIT 1;
     """
-    with conn.cursor() as cur:
-        cur.execute(sql, (table_name,))
-        row = cur.fetchone()
-        return row[0] if row else None
+    Возвращает имя первого столбца первичного ключа.
+    SQLite: PRAGMA table_info
+    PostgreSQL: системные каталоги.
+    """
+    if _is_sqlite_conn(conn):
+        with closing(conn.cursor()) as cur:
+            cur.execute(f"PRAGMA table_info({table_name})")
+            # cols: cid, name, type, notnull, dflt_value, pk(0/1/seq)
+            for cid, name, ctype, notnull, dflt, pk in cur.fetchall():
+                if pk:  # первый участвующий в PK
+                    return name
+            return None
+    else:
+        sql = """
+        SELECT a.attname
+        FROM pg_index i
+        JOIN pg_class c ON c.oid = i.indrelid
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(i.indkey)
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE i.indisprimary = true
+          AND n.nspname = 'public'
+          AND c.relname = %s
+        ORDER BY array_position(i.indkey, a.attnum)
+        LIMIT 1;
+        """
+        with closing(conn.cursor()) as cur:
+            cur.execute(sql, (table_name,))
+            row = cur.fetchone()
+            return row[0] if row else None
 
 def next_id(conn, table_name: str) -> tuple[int, str]:
     """
@@ -131,32 +200,58 @@ def next_id(conn, table_name: str) -> tuple[int, str]:
     Следующий_id = COALESCE(MAX(pk), 0) + 1
     """
     pk = get_pk_name(conn, table_name) or f"{table_name.rstrip('s')}_id"
-    with conn.cursor() as cur:
+    with closing(conn.cursor()) as cur:
         cur.execute(f"SELECT COALESCE(MAX({pk}), 0) + 1 FROM {table_name}")
         nid = cur.fetchone()[0]
     return int(nid), pk
 
 def list_user_tables(conn) -> List[str]:
-    sql = """
-    SELECT table_name
-    FROM information_schema.tables
-    WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-    ORDER BY table_name;
-    """
-    with conn.cursor() as cur:
-        cur.execute(sql)
-        return [r[0] for r in cur.fetchall()]
+    """Список пользовательских таблиц (SQLite/PG)."""
+    if _is_sqlite_conn(conn):
+        with closing(conn.cursor()) as cur:
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+            return [r[0] for r in cur.fetchall()]
+    else:
+        sql = """
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+        ORDER BY table_name;
+        """
+        with closing(conn.cursor()) as cur:
+            cur.execute(sql)
+            return [r[0] for r in cur.fetchall()]
 
 def count_columns(conn, table_name: str) -> int:
-    sql = """
-    SELECT COUNT(*)
-    FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = %s;
-    """
-    with conn.cursor() as cur:
-        cur.execute(sql, (table_name,))
-        return cur.fetchone()[0] or 0
+    """Количество столбцов (SQLite/PG)."""
+    if _is_sqlite_conn(conn):
+        with closing(conn.cursor()) as cur:
+            cur.execute(f"PRAGMA table_info({table_name})")
+            return len(cur.fetchall())
+    else:
+        sql = """
+        SELECT COUNT(*)
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = %s;
+        """
+        with closing(conn.cursor()) as cur:
+            cur.execute(sql, (table_name,))
+            return cur.fetchone()[0] or 0
 
+def columns_for_table(conn, table_name: str) -> List[str]:
+    if current_backend() == "pg":
+        with conn.cursor() as c:
+            c.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema='public' AND table_name=%s
+                ORDER BY ordinal_position
+            """, (table_name,))
+            return [r[0] for r in c.fetchall()]
+    else:
+        c = conn.cursor()
+        c.execute(f"PRAGMA table_info({table_name})")
+        return [r[1] for r in c.fetchall()]
 # -------------------------------------------------
 # Ограничения удаления
 # -------------------------------------------------
@@ -174,18 +269,22 @@ REFERENCE_MAP = {
     'operating_systems':  [('devices', 'os_id')],
     'model':              [('devices',          'model_id')]
 }
+
 def value_in_use(conn, table_name: str, pk_value: str) -> Tuple[bool, str]:
+    """
+    Проверка использования значения PK в дочерних таблицах (SQLite/PG).
+    """
     refs = REFERENCE_MAP.get(table_name, [])
     if not refs:
         return (False, '')
-    pk = get_pk_name(conn, table_name) or f"{table_name.rstrip('s')}_id"
-    with conn.cursor() as cur:
+    placeholder = _ph(conn)
+    with closing(conn.cursor()) as cur:
         for ref_table, ref_col in refs:
-            cur.execute(f"SELECT 1 FROM {ref_table} WHERE {ref_col} = %s LIMIT 1", (pk_value,))
+            sql = f"SELECT 1 FROM {ref_table} WHERE {ref_col} = {placeholder} LIMIT 1"
+            cur.execute(sql, (pk_value,))
             if cur.fetchone():
                 return (True, f"{ref_table}.{ref_col}")
     return (False, '')
-
 # -------------------------------------------------
 # Аутентификация
 # -------------------------------------------------
@@ -206,13 +305,22 @@ def register():
                 flash('Такой логин или email уже заняты.', 'danger')
                 return redirect(url_for('register'))
 
-            cur.execute("""
-                INSERT INTO users (username, email, password_hash, created_at, is_active, is_admin)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING user_id
-            """, (username, email, generate_password_hash(password), _DT.utcnow(), True, True))
-            new_id = cur.fetchone()[0]
+            if current_backend() == "pg":
+                cur.execute("""
+                    INSERT INTO users (username, email, password_hash, created_at, is_active, is_admin)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING user_id
+                """, (username, email, generate_password_hash(password), _DT.utcnow(), True, True))
+                new_id = cur.fetchone()[0]
+            else:
+                cur.execute("""
+                    INSERT INTO users (username, email, password_hash, created_at, is_active, is_admin)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (username, email, generate_password_hash(password), _DT.utcnow(), True, True))
+                new_id = cur.lastrowid
             conn.commit()
+
+
 
         user = load_user(new_id)
         login_user(user)
@@ -344,7 +452,7 @@ def index():
         except:
             last_update = None
 
-        cur.execute("SELECT COUNT(DISTINCT device_id) FROM device_retailers WHERE in_stock = TRUE")
+        cur.execute("SELECT COUNT(DISTINCT device_id) FROM device_retailers WHERE in_stock = %s", (True,))
         in_stock_devices = cur.fetchone()[0] or 0
         cur.execute("SELECT COUNT(*) FROM device_retailers")
         offers_total = cur.fetchone()[0] or 0
@@ -477,16 +585,28 @@ def add_device():
         with get_conn() as conn:
             cur = tup_cur(conn)
             new_id, _ = next_id(conn, 'devices')
-            cur.execute("""
-                INSERT INTO devices
-                    (device_id, manufacturer_id, category_id, os_id, model_id, release_date,
-                     current_price, weight_grams, color_id, is_waterproof, warranty_months, created_by)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                RETURNING device_id
-            """, (new_id, manufacturer_id, category_id, os_id, model_id, release_date,
-                  current_price, weight_grams, color_id, is_waterproof, warranty_months, current_user.id))
-            device_id = cur.fetchone()[0]
+            if current_backend() == "pg":
+                cur.execute("""
+                    INSERT INTO devices
+                        (device_id, manufacturer_id, category_id, os_id, model_id, release_date,
+                         current_price, weight_grams, color_id, is_waterproof, warranty_months, created_by)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING device_id
+                """, (new_id, manufacturer_id, category_id, os_id, model_id, release_date,
+                      current_price, weight_grams, color_id, is_waterproof, warranty_months, current_user.id))
+                device_id = cur.fetchone()[0]
+            else:
+                cur.execute("""
+                    INSERT INTO devices
+                        (device_id, manufacturer_id, category_id, os_id, model_id, release_date,
+                         current_price, weight_grams, color_id, is_waterproof, warranty_months, created_by)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (new_id, manufacturer_id, category_id, os_id, model_id, release_date,
+                      current_price, weight_grams, color_id, is_waterproof, warranty_months, current_user.id))
+                device_id = new_id
             conn.commit()
+
+
 
         # ===== Доп. характеристики: сохраняем только если что-то заполнено =====
         def _has_any(names):
@@ -768,13 +888,7 @@ def table_view(table_name):
         cur = tup_cur(conn)
         cur.execute(f"SELECT * FROM {table_name}")
         rows = cur.fetchall()
-        cur.execute("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema='public' AND table_name=%s
-            ORDER BY ordinal_position
-        """, (table_name,))
-        columns = [r[0] for r in cur.fetchall()]
+        columns = columns_for_table(conn, table_name)
         pk_name = get_pk_name(conn, table_name) or (columns[0] if columns else None)
 
         # 2) Затем выбираем строки с нужной сортировкой
@@ -814,13 +928,7 @@ def add_row(table_name):
 
     with get_conn() as conn:
         cur = tup_cur(conn)
-        cur.execute("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema='public' AND table_name=%s
-            ORDER BY ordinal_position
-        """, (table_name,))
-        columns = [r[0] for r in cur.fetchall()]
+        columns = columns_for_table(conn, table_name)
         pk_name = get_pk_name(conn, table_name) or (columns[0] if columns else None)
 
     if request.method == 'POST':
@@ -978,7 +1086,7 @@ def statistic():
         devices_without_specs = cur.fetchone()[0] or 0
 
         try:
-            cur.execute("SELECT COUNT(*) FROM devices WHERE COALESCE(is_waterproof, FALSE) = FALSE")
+            cur.execute("SELECT COUNT(*) FROM devices WHERE COALESCE(is_waterproof, %s) = %s", (False, False))
             devices_without_waterproof = cur.fetchone()[0] or 0
         except:
             devices_without_waterproof = 0
@@ -2013,6 +2121,23 @@ def api_last_specs():
 # -------------------------------------------------
 # Точка входа
 # -------------------------------------------------
+
+
+@app.route('/switch_db/<backend>')
+def switch_db(backend):
+    backend = (backend or '').lower()
+    if backend not in ('pg', 'sqlite'):
+        abort(404)
+    session['DB_BACKEND'] = backend
+    try:
+        with get_conn() as _conn:
+            pass
+    except Exception as e:
+        flash(f"Не удалось подключиться к {backend_name()}: {e}", "danger")
+        session['DB_BACKEND'] = DB_DEFAULT
+        return redirect(request.referrer or url_for('index'))
+    flash(f"Переключено на {backend_name()}.", "success")
+    return redirect(request.referrer or url_for('index'))
 if __name__ == '__main__':
-    #app.run(debug=True)
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True)
+    #app.run(host="0.0.0.0", port=5000, debug=True)
